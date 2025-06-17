@@ -3,13 +3,14 @@
 
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Landmark, WalletCards, Newspaper, UsersRound, Settings2, ShieldAlert, Target } from 'lucide-react';
+import { Landmark, WalletCards, Newspaper, UsersRound, Settings2, ShieldAlert, Target, Banknote } from 'lucide-react';
 import { DebtOverview } from '@/components/debt-overview';
 import { ExpenseTracking } from '@/components/expense-tracking';
 import { ArticleSummarization } from '@/components/article-summarization';
 import { CommunityForum } from '@/components/community-forum';
 import { PreferencesSetup } from '@/components/preferences-setup';
 import { GoalSetting } from '@/components/goal-setting';
+import { BankingIntegration } from '@/components/banking-integration';
 import { AppLogo } from '@/components/app-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ const features = [
   { id: "expenses", label: "Expense Tracking", icon: WalletCards, component: <ExpenseTracking /> },
   { id: "articles", label: "Article Summaries", icon: Newspaper, component: <ArticleSummarization /> },
   { id: "community", label: "Community Forum", icon: UsersRound, component: <CommunityForum /> },
+  { id: "banking", label: "Banking", icon: Banknote, component: <BankingIntegration /> },
   { id: "goals", label: "Goals", icon: Target, component: <GoalSetting /> },
   { id: "preferences", label: "Preferences", icon: Settings2, component: <PreferencesSetup /> },
 ];
@@ -46,7 +48,19 @@ export function AppShell() {
     if (!welcomeShown) {
       setShowWelcome(true);
     }
+    
+    const lastTab = localStorage.getItem('ascendiaLiteActiveTab');
+    if (lastTab && features.some(f => f.id === lastTab)) {
+      setActiveTab(lastTab);
+    }
+
   }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      localStorage.setItem('ascendiaLiteActiveTab', activeTab);
+    }
+  }, [activeTab, isMounted]);
 
   const handleWelcomeDismiss = () => {
     setShowWelcome(false);
@@ -64,8 +78,8 @@ export function AppShell() {
           </div>
         </header>
         <div className="container mx-auto py-4">
-          <div className="flex space-x-2 border-b">
-            {[1,2,3,4,5,6].map(i => <div key={i} className="h-10 w-24 bg-muted rounded-t-md"></div>)}
+          <div className="flex space-x-1 border-b overflow-x-auto no-scrollbar">
+            {[...Array(features.length)].map((_,i) => <div key={i} className="h-10 w-24 bg-muted rounded-t-md shrink-0"></div>)}
           </div>
           <div className="p-6 mt-4">
             <div className="h-64 bg-muted rounded-lg"></div>
@@ -110,19 +124,21 @@ export function AppShell() {
 
       <main className="flex-grow container mx-auto py-4 px-2 sm:px-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 rounded-lg p-1 h-auto">
-            {features.map((feature) => (
-              <TabsTrigger
-                key={feature.id}
-                value={feature.id}
-                className="flex-col sm:flex-row sm:gap-2 h-auto py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all duration-300"
-                aria-label={feature.label}
-              >
-                <feature.icon className="h-5 w-5 mb-1 sm:mb-0" />
-                <span className="text-xs sm:text-sm">{feature.label}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
+           <div className="overflow-x-auto no-scrollbar pb-1">
+            <TabsList className="grid w-full sm:w-auto grid-cols-[repeat(auto-fit,minmax(100px,1fr))] sm:inline-flex sm:grid-cols-none rounded-lg p-1 h-auto">
+              {features.map((feature) => (
+                <TabsTrigger
+                  key={feature.id}
+                  value={feature.id}
+                  className="flex-col sm:flex-row sm:gap-2 h-auto py-2.5 px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all duration-300 text-xs sm:text-sm"
+                  aria-label={feature.label}
+                >
+                  <feature.icon className="h-4 w-4 sm:h-5 sm:w-5 mb-1 sm:mb-0" />
+                  <span className="whitespace-nowrap">{feature.label}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
           {features.map((feature) => (
             <TabsContent key={feature.id} value={feature.id} className="mt-4 rounded-lg shadow-sm data-[state=active]:animate-fade-in">
               {feature.component}

@@ -3,12 +3,13 @@
 
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Landmark, WalletCards, Newspaper, UsersRound, Settings2, ShieldAlert } from 'lucide-react';
+import { Landmark, WalletCards, Newspaper, UsersRound, Settings2, ShieldAlert, Target } from 'lucide-react';
 import { DebtOverview } from '@/components/debt-overview';
 import { ExpenseTracking } from '@/components/expense-tracking';
 import { ArticleSummarization } from '@/components/article-summarization';
 import { CommunityForum } from '@/components/community-forum';
 import { PreferencesSetup } from '@/components/preferences-setup';
+import { GoalSetting } from '@/components/goal-setting';
 import { AppLogo } from '@/components/app-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ const features = [
   { id: "expenses", label: "Expense Tracking", icon: WalletCards, component: <ExpenseTracking /> },
   { id: "articles", label: "Article Summaries", icon: Newspaper, component: <ArticleSummarization /> },
   { id: "community", label: "Community Forum", icon: UsersRound, component: <CommunityForum /> },
+  { id: "goals", label: "Goals", icon: Target, component: <GoalSetting /> },
   { id: "preferences", label: "Preferences", icon: Settings2, component: <PreferencesSetup /> },
 ];
 
@@ -63,7 +65,7 @@ export function AppShell() {
         </header>
         <div className="container mx-auto py-4">
           <div className="flex space-x-2 border-b">
-            {[1,2,3,4,5].map(i => <div key={i} className="h-10 w-24 bg-muted rounded-t-md"></div>)}
+            {[1,2,3,4,5,6].map(i => <div key={i} className="h-10 w-24 bg-muted rounded-t-md"></div>)}
           </div>
           <div className="p-6 mt-4">
             <div className="h-64 bg-muted rounded-lg"></div>
@@ -90,10 +92,10 @@ export function AppShell() {
                     <AlertDialogHeader>
                     <AlertDialogTitle className="flex items-center"><AlertTriangle className="mr-2 h-5 w-5 text-yellow-500"/>Disclaimer</AlertDialogTitle>
                     <AlertDialogDescription>
-                        Ascendia Lite is a prototype application for demonstration purposes.
-                        Financial data displayed is illustrative and should not be considered real financial advice.
-                        The GenAI summarization feature uses a language model and summaries may not be fully accurate or complete.
-                        Always consult with a qualified financial advisor for professional advice.
+                        <div>Ascendia Lite is a prototype application for demonstration purposes.</div>
+                        <div>Financial data displayed is illustrative and should not be considered real financial advice.</div>
+                        <div>The GenAI summarization feature uses a language model and summaries may not be fully accurate or complete.</div>
+                        <div>Always consult with a qualified financial advisor for professional advice.</div>
                     </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -108,7 +110,7 @@ export function AppShell() {
 
       <main className="flex-grow container mx-auto py-4 px-2 sm:px-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 rounded-lg p-1 h-auto">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 rounded-lg p-1 h-auto">
             {features.map((feature) => (
               <TabsTrigger
                 key={feature.id}

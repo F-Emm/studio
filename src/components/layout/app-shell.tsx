@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -140,15 +141,15 @@ export function AppShell() {
                 <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center"><AppLogo /> Welcome!</AlertDialogTitle>
                 <AlertDialogDescription className="space-y-2 pt-2">
-                    <p>Welcome to Ascendia Lite! This app is a prototype designed to help you manage your finances.</p>
-                    <p className="font-semibold text-yellow-600 dark:text-yellow-400 flex items-start">
+                    <div>Welcome to Ascendia Lite! This app is a prototype designed to help you manage your finances.</div>
+                    <div className="font-semibold text-yellow-600 dark:text-yellow-400 flex items-start">
                         <ShieldAlert className="h-5 w-5 mr-2 mt-0.5 shrink-0" />
                         <span>
                             Please note: This is a demo version. All data is illustrative.
                             The AI summarization feature is for demonstration and may not always be perfectly accurate.
                             Always consult a professional for financial advice.
                         </span>
-                    </p>
+                    </div>
                 </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

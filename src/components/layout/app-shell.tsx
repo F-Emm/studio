@@ -149,7 +149,7 @@ export function AppShell() {
       <footer className="py-6 md:px-8 md:py-0 border-t bg-background">
         <div className="container flex flex-col items-center justify-center gap-4 md:h-20 md:flex-row">
           <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
-            Built by Ascendia Lite Team. &copy; {new Date().getFullYear()}. All rights reserved.
+            A demo project built by Lovette. &copy; {new Date().getFullYear()}. All rights reserved.
           </p>
         </div>
       </footer>
@@ -158,7 +158,7 @@ export function AppShell() {
             <AlertDialogContent>
                 <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center"><AppLogo /> Welcome!</AlertDialogTitle>
-                <AlertDialogDescription className="space-y-2 pt-2">
+                <AlertDialogDescription>
                     <div>Welcome to Ascendia Lite! This app is a prototype designed to help you manage your finances.</div>
                     <div className="font-semibold text-yellow-600 dark:text-yellow-400 flex items-start">
                         <ShieldAlert className="h-5 w-5 mr-2 mt-0.5 shrink-0" />

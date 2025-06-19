@@ -25,7 +25,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"; // Removed AlertDialogCancel as it's not used here
+  AlertDialogTrigger, // Added AlertDialogTrigger here
+} from "@/components/ui/alert-dialog";
 
 const features = [
   { id: "debt", label: "Debt Overview", icon: Landmark, component: <DebtOverview /> },

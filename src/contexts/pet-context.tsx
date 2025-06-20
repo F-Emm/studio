@@ -21,7 +21,7 @@ interface PetContextType {
 
 const PetContext = createContext<PetContextType | undefined>(undefined);
 
-const PET_PROFILE_STORAGE_KEY = "ascendiaLitePetProfile_v2";
+const PET_PROFILE_STORAGE_KEY = "ascendiaPetProfile_v2";
 
 interface ToastMessage {
   title: string;
@@ -198,7 +198,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
       return prev;
     });
     return fedSuccessfully;
-  }, [updatePetState, setToastQueue, petProfile]); // Added petProfile dependency for name access
+  }, [updatePetState, setToastQueue, petProfile]); 
 
   const renamePet = useCallback((newName: string) => {
     if (newName.trim()) {
@@ -211,7 +211,6 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
   }, [updatePetState]);
 
   const processFinancialEvent = useCallback((type: 'goalSet' | 'goalAchieved' | 'budgetSaved' | 'unplannedExpense' | 'debtOverdue', data?: any) => {
-    // Access petProfile directly for current name in toast messages.
     const currentPetName = petProfile?.name || "Your pet";
 
     updatePetState(prev => {
@@ -262,7 +261,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
             lastInteraction: new Date().toISOString(),
         };
     });
-  }, [updatePetState, setToastQueue, petProfile]); // Added petProfile for name access
+  }, [updatePetState, setToastQueue, petProfile]);
 
   useEffect(() => {
     const decayInterval = setInterval(() => {
@@ -296,4 +295,3 @@ export const usePet = (): PetContextType => {
   }
   return context;
 };
-

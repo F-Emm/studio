@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
-  title: 'Ascendia Lite',
+  title: 'Ascendia',
   description: 'Your personal finance companion for budgeting, debt management, and financial literacy.',
 };
 

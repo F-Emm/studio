@@ -25,7 +25,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger, // Added AlertDialogTrigger here
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 const features = [
@@ -46,12 +46,12 @@ export function AppShell() {
 
   useEffect(() => {
     setIsMounted(true);
-    const welcomeShown = localStorage.getItem('ascendiaLiteWelcomeShown');
+    const welcomeShown = localStorage.getItem('ascendiaWelcomeShown');
     if (!welcomeShown) {
       setShowWelcome(true);
     }
     
-    const lastTab = localStorage.getItem('ascendiaLiteActiveTab');
+    const lastTab = localStorage.getItem('ascendiaActiveTab');
     if (lastTab && features.some(f => f.id === lastTab)) {
       setActiveTab(lastTab);
     }
@@ -60,13 +60,13 @@ export function AppShell() {
 
   useEffect(() => {
     if (isMounted) {
-      localStorage.setItem('ascendiaLiteActiveTab', activeTab);
+      localStorage.setItem('ascendiaActiveTab', activeTab);
     }
   }, [activeTab, isMounted]);
 
   const handleWelcomeDismiss = () => {
     setShowWelcome(false);
-    localStorage.setItem('ascendiaLiteWelcomeShown', 'true');
+    localStorage.setItem('ascendiaWelcomeShown', 'true');
   };
 
   if (!isMounted) {
@@ -109,7 +109,7 @@ export function AppShell() {
                       <AlertDialogHeader>
                       <AlertDialogTitle className="flex items-center"><AlertTriangle className="mr-2 h-5 w-5 text-yellow-500"/>Disclaimer</AlertDialogTitle>
                       <AlertDialogDescription>
-                          <div>Ascendia Lite is a prototype application for demonstration purposes.</div>
+                          <div>Ascendia is a prototype application for demonstration purposes.</div>
                           <div>Financial data displayed is illustrative and should not be considered real financial advice.</div>
                           <div>The GenAI summarization feature uses a language model and summaries may not be fully accurate or complete.</div>
                           <div>Always consult with a qualified financial advisor for professional advice.</div>
@@ -162,7 +162,7 @@ export function AppShell() {
                   <AlertDialogHeader>
                   <AlertDialogTitle className="flex items-center"><AppLogo /> Welcome!</AlertDialogTitle>
                   <AlertDialogDescription>
-                      <div>Welcome to Ascendia Lite! This app is a prototype designed to help you manage your finances.</div>
+                      <div>Welcome to Ascendia! This app is a prototype designed to help you manage your finances.</div>
                       <div className="font-semibold text-yellow-600 dark:text-yellow-400 flex items-start mt-2">
                           <ShieldAlert className="h-5 w-5 mr-2 mt-0.5 shrink-0" />
                           <span>

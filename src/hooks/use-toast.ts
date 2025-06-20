@@ -42,7 +42,7 @@ type Action =
     }
   | {
       type: ActionType["UPDATE_TOAST"]
-      toast: Partial<ToasterToast> & { id: string } // Ensure ID is present for updates
+      toast: Partial<ToasterToast> & { id: string }
     }
   | {
       type: ActionType["DISMISS_TOAST"]
@@ -90,7 +90,6 @@ export const reducer = (state: State, action: Action): State => {
           const currentToast = t;
           const updates = action.toast;
           let propertiesDiffer = false;
-          // Check if any specified property in 'updates' is different from 't'
           for (const key in updates) {
             if (Object.prototype.hasOwnProperty.call(updates, key) && key !== 'id') {
               // @ts-ignore
@@ -100,10 +99,9 @@ export const reducer = (state: State, action: Action): State => {
               }
             }
           }
-
           if (propertiesDiffer) {
             toastActuallyChanged = true;
-            return { ...currentToast, ...updates }; // Apply updates
+            return { ...currentToast, ...updates };
           }
         }
         return t;
@@ -116,12 +114,11 @@ export const reducer = (state: State, action: Action): State => {
       let changed = false;
 
       const newToasts = state.toasts.map((t: ToasterToast) => {
-        // If dismissing all, or if this toast's ID matches
         if (toastId === undefined || t.id === toastId) {
-          if (t.open !== false) { // Only mark as changed if it was actually open
+          if (t.open !== false) { 
             changed = true;
-            addToRemoveQueue(t.id); // Schedule for actual removal from array
-            return { ...t, open: false }; // Set open to false
+            addToRemoveQueue(t.id); 
+            return { ...t, open: false }; 
           }
         }
         return t;
@@ -131,11 +128,9 @@ export const reducer = (state: State, action: Action): State => {
     }
     case "REMOVE_TOAST": {
       if (action.toastId === undefined) {
-        // If toastId is undefined, and toasts array is already empty, return current state.
         return state.toasts.length === 0 ? state : { ...state, toasts: [] };
       }
       const newToasts = state.toasts.filter((t) => t.id !== action.toastId);
-      // If no toasts were removed (e.g., ID not found), return current state.
       return newToasts.length === state.toasts.length ? state : { ...state, toasts: newToasts };
     }
   }
@@ -157,14 +152,14 @@ type Toast = Omit<ToasterToast, "id" | "open" | "onOpenChange" | "duration">
 function toast({ ...props }: Toast) {
   const id = genId();
   
-  // This handler is called by Radix UI's ToastPrimitives.Root when its open state changes.
   const onOpenChangeHandler = (openFromRadix: boolean) => {
-    if (!openFromRadix) { // If Radix indicates it has closed (e.g., user clicked Radix close, swiped)
-      dispatch({ type: "DISMISS_TOAST", toastId: id }); // Treat it as a dismiss action in our system
+    if (!openFromRadix) {
+      setTimeout(() => { // Make the dispatch asynchronous
+        dispatch({ type: "DISMISS_TOAST", toastId: id });
+      }, 0);
     }
   };
 
-  // This function is for programmatic dismissal (e.g., if we want a button outside the toast to close it)
   const dismissThisToast = () => {
     dispatch({
       type: "DISMISS_TOAST",
@@ -185,8 +180,8 @@ function toast({ ...props }: Toast) {
       ...props,
       id,
       open: true,
-      duration: Infinity, // Make toast persistent until explicitly closed
-      onOpenChange: onOpenChangeHandler, // Radix will call this
+      duration: Infinity, 
+      onOpenChange: onOpenChangeHandler,
     },
   });
 

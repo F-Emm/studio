@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { PetProfile } from '@/types/pet';
-import { PetStage, XP_THRESHOLDS, MAX_STAT_VALUE, MIN_STAT_VALUE, getDefaultPetProfile } from '@/types/pet';
+import { PetStage, XP_THRESHOLDS, MAX_STAT_VALUE, MIN_STAT_VALUE, getDefaultPetProfile, PetType } from '@/types/pet';
 import { useToast } from "@/hooks/use-toast";
 
 interface PetContextType {
@@ -21,42 +21,44 @@ interface PetContextType {
 
 const PetContext = createContext<PetContextType | undefined>(undefined);
 
-const PET_PROFILE_STORAGE_KEY = "ascendiaLitePetProfile_v2"; // Incremented version for new fields
+const PET_PROFILE_STORAGE_KEY = "ascendiaLitePetProfile_v2";
 
 export const PetProvider = ({ children }: { children: ReactNode }) => {
   const [petProfile, setPetProfile] = useState<PetProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const [loginToastMessages, setLoginToastMessages] = useState<Array<{title: string, description: string}>>([]);
 
   useEffect(() => {
-    try {
-      const savedProfile = localStorage.getItem(PET_PROFILE_STORAGE_KEY);
-      let profileToInitialize: PetProfile;
+    let profileToInitialize: PetProfile;
+    const initialToastsForLogin: Array<{title: string, description: string}> = [];
 
-      if (savedProfile) {
-        const parsedProfile = JSON.parse(savedProfile) as PetProfile;
-        if (parsedProfile.petId && parsedProfile.hasOwnProperty('consecutiveLoginDays')) {
+    try {
+      const savedProfileString = localStorage.getItem(PET_PROFILE_STORAGE_KEY);
+      if (savedProfileString) {
+        const parsedProfile = JSON.parse(savedProfileString) as PetProfile;
+        // Basic validation for critical fields to ensure it's a somewhat valid profile
+        if (parsedProfile.petId && parsedProfile.hasOwnProperty('consecutiveLoginDays') && parsedProfile.type && parsedProfile.stage) {
           profileToInitialize = parsedProfile;
         } else {
-          // Migrating from an old structure or invalid one
           profileToInitialize = getDefaultPetProfile(parsedProfile.userId || "defaultUser");
           if(parsedProfile.name) profileToInitialize.name = parsedProfile.name;
-          if(parsedProfile.type) profileToInitialize.type = parsedProfile.type;
-          // carry over essential old fields if they exist
+          // Ensure enum values are valid if migrating from potentially non-enum string
+          if (parsedProfile.type && Object.values(PetType).includes(parsedProfile.type as PetType)) {
+            profileToInitialize.type = parsedProfile.type as PetType;
+          }
+           if (parsedProfile.stage && Object.values(PetStage).includes(parsedProfile.stage as PetStage)) {
+            profileToInitialize.stage = parsedProfile.stage as PetStage;
+          }
         }
       } else {
         profileToInitialize = getDefaultPetProfile();
       }
 
-      // Handle login treats
       const today = new Date().toISOString().split('T')[0];
-      let newToasts: Array<{title: string, description: string}> = [];
-
       if (profileToInitialize.lastLoginDate !== today) {
         const dailyTreats = 2;
-        profileToInitialize.treats += dailyTreats;
-        newToasts.push({ title: "Daily Login!", description: `Welcome back! +${dailyTreats} treats.` });
+        profileToInitialize.treats = (profileToInitialize.treats || 0) + dailyTreats;
+        initialToastsForLogin.push({ title: "Daily Login!", description: `Welcome back! +${dailyTreats} treats.` });
 
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
@@ -65,35 +67,38 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
         if (profileToInitialize.lastLoginDate === yesterdayStr) {
           profileToInitialize.consecutiveLoginDays = (profileToInitialize.consecutiveLoginDays || 0) + 1;
         } else {
-          profileToInitialize.consecutiveLoginDays = 1; // Reset streak
+          profileToInitialize.consecutiveLoginDays = 1; 
         }
 
         if (profileToInitialize.consecutiveLoginDays >= 5) {
           const bonusTreats = 10;
           profileToInitialize.treats += bonusTreats;
-           newToasts.push({ title: "Login Streak Bonus!", description: `${profileToInitialize.consecutiveLoginDays} consecutive days! +${bonusTreats} extra treats!`});
-          // Optionally reset: profileToInitialize.consecutiveLoginDays = 0; 
+          initialToastsForLogin.push({ title: "Login Streak Bonus!", description: `${profileToInitialize.consecutiveLoginDays} consecutive days! +${bonusTreats} extra treats!`});
         }
         profileToInitialize.lastLoginDate = today;
       }
       
       setPetProfile(profileToInitialize);
-      setLoginToastMessages(newToasts);
+
+      // Show toasts immediately after setting the profile, if any
+      if (initialToastsForLogin.length > 0 && profileToInitialize) {
+          initialToastsForLogin.forEach(msg => toast({ 
+              title: msg.title, 
+              description: `${msg.description} ${profileToInitialize.name} is happy to see you!`
+          }));
+      }
 
     } catch (error) {
       console.error("Failed to load or initialize pet profile:", error);
-      setPetProfile(getDefaultPetProfile());
+      const defaultProfile = getDefaultPetProfile();
+      setPetProfile(defaultProfile);
+      // Optionally toast an error to the user if profile loading fails critically
+      // toast({ title: "Profile Error", description: "Could not load your pet's profile. Starting fresh.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
-  }, []); // Run only on mount
-
-  useEffect(() => {
-    if (!isLoading && petProfile && loginToastMessages.length > 0) {
-      loginToastMessages.forEach(msg => toast({ title: msg.title, description: `${msg.description} ${petProfile.name} is happy to see you!`}));
-      setLoginToastMessages([]); // Clear after showing
-    }
-  }, [petProfile, isLoading, loginToastMessages, toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only toast, setIsLoading, setPetProfile are dependencies, all stable
 
 
   useEffect(() => {
@@ -108,20 +113,30 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
 
   const updatePetState = useCallback((updater: (prev: PetProfile) => PetProfile) => {
     setPetProfile(prev => {
-      if (!prev) return getDefaultPetProfile();
-      const updated = updater(prev);
+      if (!prev) return getDefaultPetProfile(); // Should ideally not happen if initialized
       
-      // Check for evolution after any state update that might change XP
+      const currentPet = {...prev}; // Work with a copy for comparing before and after updater
+      const updated = updater(currentPet);
+      
       let newStage = updated.stage;
-      if (updated.stage === PetStage.HATCHLING && updated.xp >= XP_THRESHOLDS[PetStage.JUVENILE]) newStage = PetStage.JUVENILE;
-      else if (updated.stage === PetStage.JUVENILE && updated.xp >= XP_THRESHOLDS[PetStage.ADULT]) newStage = PetStage.ADULT;
-      else if (updated.stage === PetStage.ADULT && updated.xp >= XP_THRESHOLDS[PetStage.WISE_ELDER]) newStage = PetStage.WISE_ELDER;
+      let evolvedThisUpdate = false;
 
-      if (newStage !== prev.stage && newStage !== updated.stage) { // Check against original prev.stage and current updated.stage before this block
+      if (updated.stage === PetStage.HATCHLING && updated.xp >= XP_THRESHOLDS[PetStage.JUVENILE]) {
+        newStage = PetStage.JUVENILE;
+        evolvedThisUpdate = true;
+      } else if (updated.stage === PetStage.JUVENILE && updated.xp >= XP_THRESHOLDS[PetStage.ADULT]) {
+        newStage = PetStage.ADULT;
+        evolvedThisUpdate = true;
+      } else if (updated.stage === PetStage.ADULT && updated.xp >= XP_THRESHOLDS[PetStage.WISE_ELDER]) {
+        newStage = PetStage.WISE_ELDER;
+        evolvedThisUpdate = true;
+      }
+
+      if (evolvedThisUpdate) {
         toast({ title: "Evolution!", description: `${updated.name} evolved to ${newStage}!` });
         return { ...updated, stage: newStage };
       }
-      return updated; // return the result of updater if no evolution, or the evolved state.
+      return updated;
     });
   }, [toast]);
 
@@ -133,7 +148,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
       return { 
         ...prev, 
         xp: prev.xp + amount,
-        happiness: Math.min(MAX_STAT_VALUE, prev.happiness + 5), // Small happiness boost with XP
+        happiness: Math.min(MAX_STAT_VALUE, prev.happiness + 5),
         lastInteraction: new Date().toISOString() 
       };
     });
@@ -164,7 +179,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
         return {
           ...prev,
           hunger: Math.min(MAX_STAT_VALUE, prev.hunger + 20),
-          happiness: Math.min(MAX_STAT_VALUE, prev.happiness + 5), // Feeding also slightly boosts happiness
+          happiness: Math.min(MAX_STAT_VALUE, prev.happiness + 5),
           treats: prev.treats - treatCost,
           lastFed: new Date().toISOString(),
           lastInteraction: new Date().toISOString(),
@@ -213,12 +228,12 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
                 break;
             case 'unplannedExpense':
                 newHappiness = Math.max(MIN_STAT_VALUE, newHappiness - 10);
-                eventToast = { title: "Expense Tracked", description: `${prev.name} noticed an expense. Happiness -10`, variant: "destructive" };
+                eventToast = { title: "Expense Tracked", description: `${prev.name} noticed an expense. Happiness -10`, variant: "default" }; // Changed to default for less negativity
                 break;
             case 'debtOverdue':
                 newHappiness = Math.max(MIN_STAT_VALUE, newHappiness - 15);
                 newEnergy = Math.max(MIN_STAT_VALUE, newEnergy - 10);
-                eventToast = { title: "Debt Overdue!", description: `${prev.name} is worried. Happiness -15, Energy -10`, variant: "destructive" };
+                eventToast = { title: "Debt Overdue!", description: `${data?.debtName ? `Overdue: ${data.debtName}. ` : ''}${prev.name} is worried. Happiness -15, Energy -10`, variant: "destructive" };
                 break;
         }
 
@@ -226,7 +241,6 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
             toast({ title: eventToast.title, description: eventToast.description, variant: eventToast.variant });
         }
         
-        // Return potentially modified stats, evolution will be checked by updatePetState
         return {
             ...prev,
             treats: newTreats,
@@ -244,16 +258,17 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
         const now = new Date();
         const lastInteractionTime = new Date(petProfile.lastInteraction);
         // Reduce hunger and energy slightly every 30 minutes of inactivity
-        if (now.getTime() - lastInteractionTime.getTime() > 30 * 60 * 1000) {
+        if (now.getTime() - lastInteractionTime.getTime() > 30 * 60 * 1000) { // 30 minutes
           updatePetState(prev => ({
             ...prev,
-            hunger: Math.max(MIN_STAT_VALUE, prev.hunger - 2),
-            energy: Math.max(MIN_STAT_VALUE, prev.energy - 1),
-            // Do not update lastInteraction here, or decay will never happen
+            hunger: Math.max(MIN_STAT_VALUE, prev.hunger - 2), // Gentle decay
+            energy: Math.max(MIN_STAT_VALUE, prev.energy - 1), // Gentle decay
+            // Note: Not updating lastInteraction here on decay, or decay would reset itself.
+            // Decay happens based on when the *user* last interacted.
           }));
         }
       }
-    }, 15 * 60 * 1000); // Check every 15 minutes
+    }, 15 * 60 * 1000); // Check every 15 minutes for potential decay
     return () => clearInterval(decayInterval);
   }, [petProfile, isLoading, updatePetState]);
 
@@ -272,3 +287,4 @@ export const usePet = (): PetContextType => {
   }
   return context;
 };
+

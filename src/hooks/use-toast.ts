@@ -10,7 +10,7 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_REMOVE_DELAY = 1000000 // Effectively infinite for UI, removal is for memory
 
 type ToasterToast = ToastProps & {
   id: string
@@ -42,7 +42,7 @@ type Action =
     }
   | {
       type: ActionType["UPDATE_TOAST"]
-      toast: Partial<ToasterToast>
+      toast: Partial<ToasterToast> & { id: string } // Ensure ID is present for updates
     }
   | {
       type: ActionType["DISMISS_TOAST"]
@@ -90,9 +90,9 @@ export const reducer = (state: State, action: Action): State => {
           const currentToast = t;
           const updates = action.toast;
           let propertiesDiffer = false;
-          // @ts-ignore
+          // Check if any specified property in 'updates' is different from 't'
           for (const key in updates) {
-            if (Object.prototype.hasOwnProperty.call(updates, key)) {
+            if (Object.prototype.hasOwnProperty.call(updates, key) && key !== 'id') {
               // @ts-ignore
               if (currentToast[key] !== updates[key]) {
                 propertiesDiffer = true;
@@ -100,9 +100,10 @@ export const reducer = (state: State, action: Action): State => {
               }
             }
           }
+
           if (propertiesDiffer) {
             toastActuallyChanged = true;
-            return { ...currentToast, ...updates };
+            return { ...currentToast, ...updates }; // Apply updates
           }
         }
         return t;
@@ -114,28 +115,19 @@ export const reducer = (state: State, action: Action): State => {
       const { toastId } = action;
       let changed = false;
 
-      if (toastId === undefined) { // Dismiss all toasts
-        const newToasts = state.toasts.map(t => {
-          if (t.open) {
+      const mapLogic = (t: ToasterToast) => {
+        if (toastId === undefined || t.id === toastId) { // If dismissing all, or this is the one
+          if (t.open !== false) { // Only if it's not already marked as closed in our model
             changed = true;
-            addToRemoveQueue(t.id);
-            return { ...t, open: false };
+            addToRemoveQueue(t.id); // Queue for removal from array
+            return { ...t, open: false }; // Mark as not open
           }
-          return t;
-        });
-        return changed ? { ...state, toasts: newToasts } : state;
-      }
-
-      // Dismiss a specific toast
-      const newToastsSingleDismiss = state.toasts.map(t => {
-        if (t.id === toastId && t.open) {
-          changed = true;
-          addToRemoveQueue(t.id);
-          return { ...t, open: false };
         }
         return t;
-      });
-      return changed ? { ...state, toasts: newToastsSingleDismiss } : state;
+      };
+      
+      const newToasts = state.toasts.map(mapLogic);
+      return changed ? { ...state, toasts: newToasts } : state;
     }
     case "REMOVE_TOAST": {
       if (action.toastId === undefined) {
@@ -158,18 +150,36 @@ function dispatch(action: Action) {
   })
 }
 
-type Toast = Omit<ToasterToast, "id">
+type Toast = Omit<ToasterToast, "id" | "open" | "onOpenChange" | "duration"> // Internal props managed by system
 
 function toast({ ...props }: Toast) {
-  const id = genId()
+  const id = genId();
+  
+  const onOpenChangeHandler = (openFromRadix: boolean) => {
+    if (!openFromRadix) {
+      // If Radix says it's closed, update our model and queue for removal
+      dispatch({
+        type: "UPDATE_TOAST",
+        toast: { id, open: false },
+      });
+      addToRemoveQueue(id);
+    }
+  };
 
-  const update = (props: ToasterToast) =>
+  const dismissThisToast = () => {
+    // Explicit dismiss (e.g., X button)
+    dispatch({
+      type: "DISMISS_TOAST",
+      toastId: id,
+    });
+  };
+
+  const updateThisToast = (updateProps: Partial<Omit<ToasterToast, 'id' | 'open' | 'onOpenChange' | 'duration'>>) =>
     dispatch({
       type: "UPDATE_TOAST",
-      toast: { ...props, id },
-    })
-  
-  const dismissForThisToast = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
+      // @ts-ignore
+      toast: { ...updateProps, id },
+    });
 
   dispatch({
     type: "ADD_TOAST",
@@ -177,40 +187,40 @@ function toast({ ...props }: Toast) {
       ...props,
       id,
       open: true,
-      duration: Infinity, // Prevent auto-close from Radix default duration
-      onOpenChange: (open) => {
-        if (!open) dismissForThisToast()
-      },
+      duration: Infinity, // Make toast persistent until explicitly closed by Radix or user
+      onOpenChange: onOpenChangeHandler,
     },
-  })
+  });
 
   return {
     id: id,
-    dismiss: dismissForThisToast,
-    update,
-  }
+    dismiss: dismissThisToast,
+    update: updateThisToast,
+  };
 }
 
 function useToast() {
-  const [state, setState] = React.useState<State>(memoryState)
+  const [state, setState] = React.useState<State>(memoryState);
 
   React.useEffect(() => {
-    listeners.push(setState)
+    listeners.push(setState);
     return () => {
-      const index = listeners.indexOf(setState)
+      const index = listeners.indexOf(setState);
       if (index > -1) {
-        listeners.splice(index, 1)
+        listeners.splice(index, 1);
       }
-    }
-  }, [])
+    };
+  }, []); // setState is stable, so [] is fine.
+
+  const stableDismiss = React.useCallback((toastId?: string) => {
+    dispatch({ type: "DISMISS_TOAST", toastId });
+  }, []);
 
   return {
     ...state,
     toast,
-    dismiss: React.useCallback((toastId?: string) => {
-      dispatch({ type: "DISMISS_TOAST", toastId })
-    }, []),
-  }
+    dismiss: stableDismiss,
+  };
 }
 
-export { useToast, toast }
+export { useToast, toast };

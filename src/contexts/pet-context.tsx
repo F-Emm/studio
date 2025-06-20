@@ -23,26 +23,31 @@ const PetContext = createContext<PetContextType | undefined>(undefined);
 
 const PET_PROFILE_STORAGE_KEY = "ascendiaLitePetProfile_v2";
 
+interface ToastMessage {
+  title: string;
+  description: string;
+  variant?: "default" | "destructive";
+}
+
 export const PetProvider = ({ children }: { children: ReactNode }) => {
   const [petProfile, setPetProfile] = useState<PetProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const [toastQueue, setToastQueue] = useState<ToastMessage[]>([]);
 
   useEffect(() => {
     let profileToInitialize: PetProfile;
-    const initialToastsForLogin: Array<{title: string, description: string}> = [];
+    const initialToastsForLoginQueue: ToastMessage[] = [];
 
     try {
       const savedProfileString = localStorage.getItem(PET_PROFILE_STORAGE_KEY);
       if (savedProfileString) {
         const parsedProfile = JSON.parse(savedProfileString) as PetProfile;
-        // Basic validation for critical fields to ensure it's a somewhat valid profile
         if (parsedProfile.petId && parsedProfile.hasOwnProperty('consecutiveLoginDays') && parsedProfile.type && parsedProfile.stage) {
           profileToInitialize = parsedProfile;
         } else {
           profileToInitialize = getDefaultPetProfile(parsedProfile.userId || "defaultUser");
           if(parsedProfile.name) profileToInitialize.name = parsedProfile.name;
-          // Ensure enum values are valid if migrating from potentially non-enum string
           if (parsedProfile.type && Object.values(PetType).includes(parsedProfile.type as PetType)) {
             profileToInitialize.type = parsedProfile.type as PetType;
           }
@@ -58,7 +63,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
       if (profileToInitialize.lastLoginDate !== today) {
         const dailyTreats = 2;
         profileToInitialize.treats = (profileToInitialize.treats || 0) + dailyTreats;
-        initialToastsForLogin.push({ title: "Daily Login!", description: `Welcome back! +${dailyTreats} treats.` });
+        initialToastsForLoginQueue.push({ title: "Daily Login!", description: `Welcome back! +${dailyTreats} treats for ${profileToInitialize.name}!` });
 
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
@@ -67,38 +72,31 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
         if (profileToInitialize.lastLoginDate === yesterdayStr) {
           profileToInitialize.consecutiveLoginDays = (profileToInitialize.consecutiveLoginDays || 0) + 1;
         } else {
-          profileToInitialize.consecutiveLoginDays = 1; 
+          profileToInitialize.consecutiveLoginDays = 1;
         }
 
         if (profileToInitialize.consecutiveLoginDays >= 5) {
           const bonusTreats = 10;
           profileToInitialize.treats += bonusTreats;
-          initialToastsForLogin.push({ title: "Login Streak Bonus!", description: `${profileToInitialize.consecutiveLoginDays} consecutive days! +${bonusTreats} extra treats!`});
+          initialToastsForLoginQueue.push({ title: "Login Streak Bonus!", description: `${profileToInitialize.consecutiveLoginDays} consecutive days! +${bonusTreats} extra treats for ${profileToInitialize.name}!`});
         }
         profileToInitialize.lastLoginDate = today;
       }
       
       setPetProfile(profileToInitialize);
-
-      // Show toasts immediately after setting the profile, if any
-      if (initialToastsForLogin.length > 0 && profileToInitialize) {
-          initialToastsForLogin.forEach(msg => toast({ 
-              title: msg.title, 
-              description: `${msg.description} ${profileToInitialize.name} is happy to see you!`
-          }));
+      if (initialToastsForLoginQueue.length > 0) {
+        setToastQueue(q => [...q, ...initialToastsForLoginQueue]);
       }
 
     } catch (error) {
       console.error("Failed to load or initialize pet profile:", error);
       const defaultProfile = getDefaultPetProfile();
       setPetProfile(defaultProfile);
-      // Optionally toast an error to the user if profile loading fails critically
-      // toast({ title: "Profile Error", description: "Could not load your pet's profile. Starting fresh.", variant: "destructive" });
+      setToastQueue(q => [...q, { title: "Profile Error", description: "Could not load pet's profile. Starting fresh.", variant: "destructive" }]);
     } finally {
       setIsLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only toast, setIsLoading, setPetProfile are dependencies, all stable
+  }, []);
 
 
   useEffect(() => {
@@ -111,11 +109,19 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [petProfile, isLoading]);
 
+  useEffect(() => {
+    if (toastQueue.length > 0) {
+      toastQueue.forEach(msg => toast({ title: msg.title, description: msg.description, variant: msg.variant }));
+      setToastQueue([]); // Clear the queue
+    }
+  }, [toastQueue, toast]);
+
+
   const updatePetState = useCallback((updater: (prev: PetProfile) => PetProfile) => {
     setPetProfile(prev => {
-      if (!prev) return getDefaultPetProfile(); // Should ideally not happen if initialized
+      if (!prev) return getDefaultPetProfile(); 
       
-      const currentPet = {...prev}; // Work with a copy for comparing before and after updater
+      const currentPet = {...prev}; 
       const updated = updater(currentPet);
       
       let newStage = updated.stage;
@@ -133,18 +139,18 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (evolvedThisUpdate) {
-        toast({ title: "Evolution!", description: `${updated.name} evolved to ${newStage}!` });
+        setToastQueue(q => [...q, { title: "Evolution!", description: `${updated.name} evolved to ${newStage}!` }]);
         return { ...updated, stage: newStage };
       }
       return updated;
     });
-  }, [toast]);
+  }, [setToastQueue]);
 
   const gainXp = useCallback((amount: number, silent: boolean = false) => {
+    if (!silent && petProfile) {
+      setToastQueue(q => [...q, { title: "XP Gained!", description: `${petProfile.name} got +${amount} XP!` }]);
+    }
     updatePetState(prev => {
-      if (!silent) {
-        toast({ title: "XP Gained!", description: `${prev.name} got +${amount} XP!` });
-      }
       return { 
         ...prev, 
         xp: prev.xp + amount,
@@ -152,7 +158,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
         lastInteraction: new Date().toISOString() 
       };
     });
-  }, [updatePetState, toast]);
+  }, [updatePetState, setToastQueue, petProfile]);
 
   const updateStat = useCallback((stat: keyof Pick<PetProfile, 'hunger' | 'happiness' | 'energy'>, amount: number) => {
     updatePetState(prev => {
@@ -163,19 +169,22 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
 
   const rewardTreats = useCallback((amount: number, reason?: string) => {
     updatePetState(prev => {
-      if (reason) {
-        toast({ title: "Treats Rewarded!", description: `${reason} +${amount} treats for ${prev.name}!` });
+      if (reason && petProfile) {
+         setToastQueue(q => [...q, { title: "Treats Rewarded!", description: `${reason} +${amount} treats for ${petProfile.name}!` }]);
       }
       return { ...prev, treats: prev.treats + amount };
     });
-  }, [updatePetState, toast]);
+  }, [updatePetState, setToastQueue, petProfile]);
 
   const feedPet = useCallback((treatCost: number = 1): boolean => {
     let fedSuccessfully = false;
+    // Access petProfile directly here for the name and current treats for the toast.
+    const currentPetName = petProfile?.name || "Your pet"; 
+    
     updatePetState(prev => {
       if (prev.treats >= treatCost) {
         fedSuccessfully = true;
-        toast({ title: "Yum!", description: `${prev.name} enjoyed the treat!` });
+        setToastQueue(q => [...q, { title: "Yum!", description: `${prev.name} enjoyed the treat!` }]);
         return {
           ...prev,
           hunger: Math.min(MAX_STAT_VALUE, prev.hunger + 20),
@@ -185,11 +194,11 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
           lastInteraction: new Date().toISOString(),
         };
       }
-      toast({ title: "Oh no!", description: `Not enough treats to feed ${prev.name}.`, variant: "destructive" });
+      setToastQueue(q => [...q, { title: "Oh no!", description: `Not enough treats to feed ${prev.name}.`, variant: "destructive" }]);
       return prev;
     });
     return fedSuccessfully;
-  }, [updatePetState, toast]);
+  }, [updatePetState, setToastQueue, petProfile]); // Added petProfile dependency for name access
 
   const renamePet = useCallback((newName: string) => {
     if (newName.trim()) {
@@ -202,43 +211,46 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
   }, [updatePetState]);
 
   const processFinancialEvent = useCallback((type: 'goalSet' | 'goalAchieved' | 'budgetSaved' | 'unplannedExpense' | 'debtOverdue', data?: any) => {
+    // Access petProfile directly for current name in toast messages.
+    const currentPetName = petProfile?.name || "Your pet";
+
     updatePetState(prev => {
         let newTreats = prev.treats;
         let newXp = prev.xp;
         let newHappiness = prev.happiness;
         let newEnergy = prev.energy;
-        let eventToast: { title: string, description: string, variant?: "default" | "destructive" } | null = null;
+        let eventToastMessage: ToastMessage | null = null;
 
         switch (type) {
             case 'goalSet':
                 newTreats += 5;
                 newXp += 10;
-                eventToast = { title: "Goal Set!", description: `${prev.name} is proud! +5 treats, +10 XP` };
+                eventToastMessage = { title: "Goal Set!", description: `${prev.name} is proud! +5 treats, +10 XP` };
                 break;
             case 'goalAchieved':
                 newTreats += 20;
                 newXp += 50;
                 newHappiness = Math.min(MAX_STAT_VALUE, newHappiness + 20);
-                eventToast = { title: "Goal Achieved!", description: `Amazing! ${prev.name} is overjoyed! +20 treats, +50 XP, +20 Happiness` };
+                eventToastMessage = { title: "Goal Achieved!", description: `Amazing! ${prev.name} is overjoyed! +20 treats, +50 XP, +20 Happiness` };
                 break;
             case 'budgetSaved':
                 newTreats += 10;
                 newXp += 5;
-                eventToast = { title: "Preferences Saved!", description: `${prev.name} likes your planning! +10 treats, +5 XP` };
+                eventToastMessage = { title: "Preferences Saved!", description: `${prev.name} likes your planning! +10 treats, +5 XP` };
                 break;
             case 'unplannedExpense':
                 newHappiness = Math.max(MIN_STAT_VALUE, newHappiness - 10);
-                eventToast = { title: "Expense Tracked", description: `${prev.name} noticed an expense. Happiness -10`, variant: "default" }; // Changed to default for less negativity
+                eventToastMessage = { title: "Expense Tracked", description: `${prev.name} noticed an expense. Happiness -10`, variant: "default" };
                 break;
             case 'debtOverdue':
                 newHappiness = Math.max(MIN_STAT_VALUE, newHappiness - 15);
                 newEnergy = Math.max(MIN_STAT_VALUE, newEnergy - 10);
-                eventToast = { title: "Debt Overdue!", description: `${data?.debtName ? `Overdue: ${data.debtName}. ` : ''}${prev.name} is worried. Happiness -15, Energy -10`, variant: "destructive" };
+                eventToastMessage = { title: "Debt Overdue!", description: `${data?.debtName ? `Overdue: ${data.debtName}. ` : ''}${prev.name} is worried. Happiness -15, Energy -10`, variant: "destructive" };
                 break;
         }
 
-        if (eventToast) {
-            toast({ title: eventToast.title, description: eventToast.description, variant: eventToast.variant });
+        if (eventToastMessage) {
+            setToastQueue(q => [...q, eventToastMessage]);
         }
         
         return {
@@ -250,25 +262,22 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
             lastInteraction: new Date().toISOString(),
         };
     });
-  }, [updatePetState, toast]);
+  }, [updatePetState, setToastQueue, petProfile]); // Added petProfile for name access
 
   useEffect(() => {
     const decayInterval = setInterval(() => {
       if (petProfile && !isLoading) {
         const now = new Date();
         const lastInteractionTime = new Date(petProfile.lastInteraction);
-        // Reduce hunger and energy slightly every 30 minutes of inactivity
-        if (now.getTime() - lastInteractionTime.getTime() > 30 * 60 * 1000) { // 30 minutes
+        if (now.getTime() - lastInteractionTime.getTime() > 30 * 60 * 1000) { 
           updatePetState(prev => ({
             ...prev,
-            hunger: Math.max(MIN_STAT_VALUE, prev.hunger - 2), // Gentle decay
-            energy: Math.max(MIN_STAT_VALUE, prev.energy - 1), // Gentle decay
-            // Note: Not updating lastInteraction here on decay, or decay would reset itself.
-            // Decay happens based on when the *user* last interacted.
+            hunger: Math.max(MIN_STAT_VALUE, prev.hunger - 2), 
+            energy: Math.max(MIN_STAT_VALUE, prev.energy - 1), 
           }));
         }
       }
-    }, 15 * 60 * 1000); // Check every 15 minutes for potential decay
+    }, 15 * 60 * 1000); 
     return () => clearInterval(decayInterval);
   }, [petProfile, isLoading, updatePetState]);
 

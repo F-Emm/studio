@@ -39,6 +39,8 @@ const features = [
   { id: "preferences", label: "Preferences", icon: Settings2, component: <PreferencesSetup /> },
 ];
 
+const WELCOME_STORAGE_KEY = 'ascendiaWelcomeShown_v2';
+
 export function AppShell() {
   const [activeTab, setActiveTab] = useState(features[0].id);
   const [isMounted, setIsMounted] = useState(false);
@@ -46,12 +48,12 @@ export function AppShell() {
 
   useEffect(() => {
     setIsMounted(true);
-    const welcomeShown = localStorage.getItem('ascendiaWelcomeShown');
+    const welcomeShown = localStorage.getItem(WELCOME_STORAGE_KEY);
     if (!welcomeShown) {
       setShowWelcome(true);
     }
     
-    const lastTab = localStorage.getItem('ascendiaActiveTab');
+    const lastTab = localStorage.getItem('ascendiaActiveTab_v2');
     if (lastTab && features.some(f => f.id === lastTab)) {
       setActiveTab(lastTab);
     }
@@ -60,14 +62,26 @@ export function AppShell() {
 
   useEffect(() => {
     if (isMounted) {
-      localStorage.setItem('ascendiaActiveTab', activeTab);
+      localStorage.setItem('ascendiaActiveTab_v2', activeTab);
     }
   }, [activeTab, isMounted]);
 
   const handleWelcomeDismiss = () => {
     setShowWelcome(false);
-    localStorage.setItem('ascendiaWelcomeShown', 'true');
+    localStorage.setItem(WELCOME_STORAGE_KEY, 'true');
   };
+
+  const handleWelcomeOpenChange = (isOpen: boolean) => {
+    // This handler is for when Radix signals a state change (e.g., Escape key, overlay click)
+    if (!isOpen) {
+      setShowWelcome(false);
+      localStorage.setItem(WELCOME_STORAGE_KEY, 'true');
+    }
+    // If Radix signals isOpen is true, we don't call setShowWelcome(true) here
+    // as it might be part of a loop if showWelcome is already true.
+    // The initial opening is handled by the useEffect.
+  };
+
 
   if (!isMounted) {
     // Basic skeleton loader for the shell
@@ -157,7 +171,7 @@ export function AppShell() {
           </div>
         </footer>
         {isMounted && showWelcome && (
-          <AlertDialog open={showWelcome} onOpenChange={setShowWelcome}>
+          <AlertDialog open={showWelcome} onOpenChange={handleWelcomeOpenChange}>
               <AlertDialogContent>
                   <AlertDialogHeader>
                   <AlertDialogTitle className="flex items-center"><AppLogo /> Welcome!</AlertDialogTitle>

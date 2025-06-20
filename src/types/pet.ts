@@ -37,6 +37,7 @@ export interface PetProfile {
   consecutiveLoginDays: number;
   goalsSet: number;
   goalsCompleted: number;
+  processedOverdueDebtsToday: Record<string, string>; // Key: debtId, Value: YYYY-MM-DD
 }
 
 export const XP_THRESHOLDS = {
@@ -66,4 +67,6 @@ export const getDefaultPetProfile = (userId: string = "defaultUser"): PetProfile
   consecutiveLoginDays: 0,
   goalsSet: 0,
   goalsCompleted: 0,
+  processedOverdueDebtsToday: {},
 });
+

@@ -12,8 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { usePet } from '@/contexts/pet-context'; // Import usePet
-import { isPast, isValid, parseISO } from 'date-fns'; // For date checking
+import { usePet } from '@/contexts/pet-context';
+import { isPast, isValid, parseISO } from 'date-fns';
 
 interface Debt {
   id: string;
@@ -22,12 +22,12 @@ interface Debt {
   totalAmount: number;
   paidAmount: number;
   interestRate: number;
-  dueDate?: string; // Expect YYYY-MM-DD string
+  dueDate?: string;
 }
 
 const initialDebts: Debt[] = [
   { id: '1', name: 'Credit Card Loan', category: 'Credit Card', totalAmount: 5000, paidAmount: 1500, interestRate: 18.5 },
-  { id: '2', name: 'Student Loan', category: 'Education', totalAmount: 20000, paidAmount: 5000, interestRate: 5.0, dueDate: '2023-12-01' }, // Example overdue
+  { id: '2', name: 'Student Loan', category: 'Education', totalAmount: 20000, paidAmount: 5000, interestRate: 5.0, dueDate: '2023-12-01' },
   { id: '3', name: 'Mortgage', category: 'Housing', totalAmount: 150000, paidAmount: 30000, interestRate: 3.5, dueDate: '2040-01-15' },
   { id: '4', name: 'Car Loan', category: 'Vehicle', totalAmount: 12000, paidAmount: 6000, interestRate: 7.2, dueDate: '2027-06-30' },
 ];
@@ -49,11 +49,10 @@ export function DebtOverview() {
   const [debts, setDebts] = useState<Debt[]>(initialDebts);
   const [newDebt, setNewDebt] = useState({ name: '', category: 'Other', totalAmount: '', paidAmount: '', interestRate: '', dueDate: '' });
   const [isMounted, setIsMounted] = useState(false);
-  const { processFinancialEvent } = usePet(); // Get pet context function
+  const { processFinancialEvent } = usePet();
 
   useEffect(() => {
     setIsMounted(true);
-    // Load debts from localStorage
     const savedDebts = localStorage.getItem("userDebts");
     if (savedDebts) {
         try {
@@ -67,12 +66,11 @@ export function DebtOverview() {
   useEffect(() => {
     if (isMounted) {
       localStorage.setItem("userDebts", JSON.stringify(debts));
-      // Check for overdue debts on mount and when debts change
       debts.forEach(debt => {
         if (debt.dueDate) {
-            const dueDateObj = parseISO(debt.dueDate); // Use parseISO for YYYY-MM-DD
+            const dueDateObj = parseISO(debt.dueDate);
             if (isValid(dueDateObj) && isPast(dueDateObj)) {
-                processFinancialEvent('debtOverdue', { debtName: debt.name });
+                processFinancialEvent('debtOverdue', { debtId: debt.id, debtName: debt.name });
             }
         }
       });
@@ -218,7 +216,7 @@ export function DebtOverview() {
                 <Progress value={progress} className="w-full h-2.5" aria-label={`${debt.name} progress: ${progress.toFixed(2)}% paid`} />
                 {debt.dueDate && (
                     <p className={`text-xs mt-1 ${isOverdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
-                        Due: {new Date(debt.dueDate).toLocaleDateString()} {isOverdue ? '(Overdue!)' : ''}
+                        Due: {new Date(debt.dueDate + 'T00:00:00').toLocaleDateString()} {isOverdue ? '(Overdue!)' : ''}
                     </p>
                 )}
               </CardContent>
@@ -246,3 +244,4 @@ export function DebtOverview() {
     </div>
   );
 }
+

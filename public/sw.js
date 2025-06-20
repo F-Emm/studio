@@ -1,19 +1,30 @@
+// Incrementing CACHE_NAME version
+const CACHE_NAME = 'ascendia-cache-v2';
+const OFFLINE_URL = 'offline.html';
 
-const CACHE_NAME = 'ascendia-cache-v1';
-const OFFLINE_URL = '/offline.html';
-const PRECACHE_ASSETS = [
+// Add manifest.json and logo.png to the list of files to cache
+const CACHE_FILES = [
   '/',
-  OFFLINE_URL
+  '/offline.html',
+  '/manifest.json',
+  '/logo.png'
+  // Add other critical shell assets if needed.
+  // For Next.js with App Router, many assets are hashed,
+  // so runtime caching handles them well.
+  // These are core, unhashed assets we want to ensure are fresh.
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('[ServiceWorker] Pre-caching offline page and core assets.');
-        return cache.addAll(PRECACHE_ASSETS);
+        console.log('[ServiceWorker] Pre-caching offline page and core assets');
+        return cache.addAll(CACHE_FILES);
       })
-      .then(() => self.skipWaiting()) // Force the waiting service worker to become the active service worker.
+      .then(() => {
+        // Force the waiting service worker to become the active service worker.
+        return self.skipWaiting();
+      })
   );
 });
 
@@ -28,7 +39,11 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    }).then(() => self.clients.claim()) // Take control of all open clients.
+    })
+    .then(() => {
+        // Tell the active service worker to take control of the page immediately.
+        return self.clients.claim();
+    })
   );
 });
 
@@ -37,43 +52,40 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       (async () => {
         try {
-          const networkResponse = await fetch(event.request);
-          // Check if we received a valid response
-          if (networkResponse && networkResponse.ok) {
-            const cache = await caches.open(CACHE_NAME);
-            cache.put(event.request, networkResponse.clone());
+          const preloadResponse = await event.preloadResponse;
+          if (preloadResponse) {
+            return preloadResponse;
           }
+
+          const networkResponse = await fetch(event.request);
           return networkResponse;
         } catch (error) {
           console.log('[ServiceWorker] Fetch failed; returning offline page instead.', error);
+
           const cache = await caches.open(CACHE_NAME);
           const cachedResponse = await cache.match(OFFLINE_URL);
           return cachedResponse;
         }
       })()
     );
-  } else if (PRECACHE_ASSETS.includes(event.request.url) || event.request.destination === 'style' || event.request.destination === 'script' || event.request.destination === 'font') {
-    // Cache-First strategy for static assets (CSS, JS, Fonts) and precached items
-     event.respondWith(
+  } else if (CACHE_FILES.includes(new URL(event.request.url).pathname) || event.request.url.startsWith(self.location.origin)) {
+    // Serve from cache first for other assets (like CSS, JS, images defined in CACHE_FILES or same-origin)
+    event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
         if (cachedResponse) {
           return cachedResponse;
         }
         return fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.ok) {
-            const cache = caches.open(CACHE_NAME);
-            cache.then(c => c.put(event.request, networkResponse.clone()));
-          }
+          // Optionally, cache new resources dynamically
+          // Be careful with caching too much dynamically, especially with hashed assets.
+          // if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+          //   const cache = await caches.open(CACHE_NAME);
+          //   cache.put(event.request, networkResponse.clone());
+          // }
           return networkResponse;
-        }).catch(async (error) => {
-            console.log('[ServiceWorker] Fetch failed for static asset; potentially offline.', event.request.url, error);
-            // For images or other non-critical assets, you might not want to return offline.html
-            // but for scripts/styles, it's part of the core shell.
-            if (event.request.destination === 'script' || event.request.destination === 'style') {
-                 const cache = await caches.open(CACHE_NAME);
-                 return cache.match(OFFLINE_URL);
-            }
-            // return new Response(null, { status: 404 }); // Or some other generic fallback
+        }).catch(() => {
+          // If fetch fails and it's an image, you might want a placeholder
+          // For now, just let it fail if not in cache
         });
       })
     );

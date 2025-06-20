@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -11,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Settings, DollarSign, Target, ListChecks } from "lucide-react";
+import { usePet } from '@/contexts/pet-context'; // Import usePet
 
 const preferencesSchema = z.object({
   monthlyIncome: z.preprocess(
@@ -45,6 +47,7 @@ const spendingCategories = [
 export function PreferencesSetup() {
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
+  const { processFinancialEvent } = usePet(); // Get pet context function
   
   const { control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<PreferencesFormData>({
     resolver: zodResolver(preferencesSchema),
@@ -64,12 +67,10 @@ export function PreferencesSetup() {
 
   useEffect(() => {
     setIsMounted(true);
-    // Load saved preferences from localStorage if they exist
     const savedPrefs = localStorage.getItem("userPreferences");
     if (savedPrefs) {
       try {
         const parsedPrefs = JSON.parse(savedPrefs);
-        // Validate parsedPrefs against schema before resetting form
         const validationResult = preferencesSchema.safeParse(parsedPrefs);
         if (validationResult.success) {
           reset(validationResult.data);
@@ -90,6 +91,7 @@ export function PreferencesSetup() {
       title: "Preferences Saved",
       description: "Your budgeting preferences have been updated.",
     });
+    processFinancialEvent('budgetSaved'); // Pet interaction
   };
 
   if (!isMounted) {

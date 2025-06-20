@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -10,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ShoppingCart, Utensils, Home, Car, TrendingUp, CircleDollarSign } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, PieChart, Pie, Cell } from "@/components/ui/chart";
 import type { ChartConfig } from "@/components/ui/chart";
+import { usePet } from '@/contexts/pet-context'; // Import usePet
 
 interface Expense {
   id: string;
@@ -60,10 +62,26 @@ export function ExpenseTracking() {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState(expenseCategories[0]);
   const [isMounted, setIsMounted] = useState(false);
+  const { processFinancialEvent } = usePet(); // Get pet context function
 
   useEffect(() => {
     setIsMounted(true);
+    // Load expenses from localStorage
+    const savedExpenses = localStorage.getItem("userExpenses");
+    if (savedExpenses) {
+      try {
+        setExpenses(JSON.parse(savedExpenses));
+      } catch (e) {
+        console.error("Error parsing expenses from localStorage", e);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      localStorage.setItem("userExpenses", JSON.stringify(expenses));
+    }
+  }, [expenses, isMounted]);
 
   const handleAddExpense = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +97,7 @@ export function ExpenseTracking() {
       setDescription('');
       setAmount('');
       setCategory(expenseCategories[0]);
+      processFinancialEvent('unplannedExpense', { amount: newExpense.amount, category: newExpense.category }); // Pet interaction
     }
   };
 
@@ -183,7 +202,7 @@ export function ExpenseTracking() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {expenses.slice(0, 5).map((expense) => {
+                {expenses.slice(0, 10).map((expense) => { // Show more recent expenses
                   const Icon = categoryIcons[expense.category] || CircleDollarSign;
                   return (
                     <TableRow key={expense.id}>

@@ -33,6 +33,10 @@ export interface PetProfile {
   lastInteraction: string; // ISO string date for general interaction
   treats: number; // In-app currency for feeding/shop
   accessories: PetAccessory[]; // Equipped accessories
+  lastLoginDate: string; // YYYY-MM-DD
+  consecutiveLoginDays: number;
+  goalsSet: number;
+  goalsCompleted: number;
 }
 
 export const XP_THRESHOLDS = {
@@ -58,4 +62,8 @@ export const getDefaultPetProfile = (userId: string = "defaultUser"): PetProfile
   lastInteraction: new Date().toISOString(),
   treats: 10,
   accessories: [],
+  lastLoginDate: "1970-01-01", // Ensures first login gives treats
+  consecutiveLoginDays: 0,
+  goalsSet: 0,
+  goalsCompleted: 0,
 });

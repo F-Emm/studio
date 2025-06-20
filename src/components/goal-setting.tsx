@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react'; // Added useContext
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,8 +12,9 @@ import { Calendar } from "@/components/ui/calendar";
 import { Target, PlusCircle, Trash2, CheckCircle2, CalendarIcon, Edit3 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format, isValid } from 'date-fns';
+import { usePet } from '@/contexts/pet-context'; // Import usePet
 
-interface Goal {
+export interface Goal { // Exporting Goal interface
   id: string;
   name: string;
   targetAmount: number;
@@ -33,6 +34,7 @@ export function GoalSetting() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isMounted, setIsMounted] = useState(false);
   const { toast } = useToast();
+  const { processFinancialEvent } = usePet(); // Get pet context function
 
   const [goalName, setGoalName] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
@@ -107,6 +109,9 @@ export function GoalSetting() {
         isComplete: parsedCurrentAmount >= parsedTargetAmount,
       } : g));
       toast({ title: "Goal Updated", description: `"${goalName}" has been updated.` });
+      if(parsedCurrentAmount >= parsedTargetAmount && !goals.find(g => g.id === editingGoalId)?.isComplete){
+        processFinancialEvent('goalAchieved');
+      }
     } else {
       // Add new goal
       const newGoal: Goal = {
@@ -119,6 +124,10 @@ export function GoalSetting() {
       };
       setGoals([newGoal, ...goals]);
       toast({ title: "Goal Added", description: `"${goalName}" has been added.` });
+      processFinancialEvent('goalSet');
+      if(newGoal.isComplete){
+        processFinancialEvent('goalAchieved');
+      }
     }
     resetForm();
   };
@@ -137,17 +146,25 @@ export function GoalSetting() {
   };
 
   const handleToggleComplete = (id: string) => {
+    let goalAchievedJustNow = false;
     setGoals(goals.map(goal => {
       if (goal.id === id) {
         const newCompleteStatus = !goal.isComplete;
+        if (newCompleteStatus && !goal.isComplete) { // Was not complete, now is
+            goalAchievedJustNow = true;
+        }
         return {
           ...goal,
           isComplete: newCompleteStatus,
-          currentAmount: newCompleteStatus ? goal.targetAmount : goal.currentAmount // Max out current if complete
+          currentAmount: newCompleteStatus ? goal.targetAmount : goal.currentAmount 
         };
       }
       return goal;
     }));
+
+    if (goalAchievedJustNow) {
+        processFinancialEvent('goalAchieved');
+    }
   };
 
   if (!isMounted) {

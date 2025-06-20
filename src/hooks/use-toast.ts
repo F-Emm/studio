@@ -1,3 +1,4 @@
+
 "use client"
 
 // Inspired by react-hot-toast library
@@ -82,50 +83,53 @@ export const reducer = (state: State, action: Action): State => {
         toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
       }
 
-    case "UPDATE_TOAST":
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === action.toast.id ? { ...t, ...action.toast } : t
-        ),
-      }
+    case "UPDATE_TOAST": {
+      let changed = false;
+      const newToasts = state.toasts.map((t) => {
+        if (t.id === action.toast.id) {
+          // A more granular check could be done here if all props of action.toast are compared
+          changed = true; 
+          return { ...t, ...action.toast };
+        }
+        return t;
+      });
+      return changed ? { ...state, toasts: newToasts } : state;
+    }
 
     case "DISMISS_TOAST": {
-      const { toastId } = action
+      const { toastId } = action;
+      let changed = false;
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
-      if (toastId) {
-        addToRemoveQueue(toastId)
-      } else {
-        state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id)
-        })
+      if (toastId === undefined) { // Dismiss all toasts
+        const newToasts = state.toasts.map(t => {
+          if (t.open) {
+            changed = true;
+            addToRemoveQueue(t.id);
+            return { ...t, open: false };
+          }
+          return t;
+        });
+        return changed ? { ...state, toasts: newToasts } : state;
       }
 
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === toastId || toastId === undefined
-            ? {
-                ...t,
-                open: false,
-              }
-            : t
-        ),
-      }
-    }
-    case "REMOVE_TOAST":
-      if (action.toastId === undefined) {
-        return {
-          ...state,
-          toasts: [],
+      // Dismiss a specific toast
+      const newToastsSingleDismiss = state.toasts.map(t => {
+        if (t.id === toastId && t.open) {
+          changed = true;
+          addToRemoveQueue(t.id);
+          return { ...t, open: false };
         }
+        return t;
+      });
+      return changed ? { ...state, toasts: newToastsSingleDismiss } : state;
+    }
+    case "REMOVE_TOAST": {
+      if (action.toastId === undefined) {
+        return state.toasts.length === 0 ? state : { ...state, toasts: [] };
       }
-      return {
-        ...state,
-        toasts: state.toasts.filter((t) => t.id !== action.toastId),
-      }
+      const newToasts = state.toasts.filter((t) => t.id !== action.toastId);
+      return newToasts.length === state.toasts.length ? state : { ...state, toasts: newToasts };
+    }
   }
 }
 
@@ -150,7 +154,10 @@ function toast({ ...props }: Toast) {
       type: "UPDATE_TOAST",
       toast: { ...props, id },
     })
-  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
+  
+  // This specific dismiss function is for the onOpenChange callback,
+  // it needs to capture the correct 'id'.
+  const dismissForThisToast = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 
   dispatch({
     type: "ADD_TOAST",
@@ -159,14 +166,14 @@ function toast({ ...props }: Toast) {
       id,
       open: true,
       onOpenChange: (open) => {
-        if (!open) dismiss()
+        if (!open) dismissForThisToast()
       },
     },
   })
 
   return {
     id: id,
-    dismiss,
+    dismiss: dismissForThisToast, // The dismiss function specific to this toast id
     update,
   }
 }
@@ -182,12 +189,14 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+  }, []) // Empty dependency array: subscribe on mount, unsubscribe on unmount
 
   return {
     ...state,
-    toast,
-    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
+    toast, // `toast` utility function
+    dismiss: React.useCallback((toastId?: string) => { // General dismiss function
+      dispatch({ type: "DISMISS_TOAST", toastId })
+    }, []),
   }
 }
 

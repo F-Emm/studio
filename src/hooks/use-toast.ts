@@ -84,16 +84,30 @@ export const reducer = (state: State, action: Action): State => {
       }
 
     case "UPDATE_TOAST": {
-      let changed = false;
+      let toastActuallyChanged = false;
       const newToasts = state.toasts.map((t) => {
         if (t.id === action.toast.id) {
-          // A more granular check could be done here if all props of action.toast are compared
-          changed = true; 
-          return { ...t, ...action.toast };
+          const currentToast = t;
+          const updates = action.toast;
+          let propertiesDiffer = false;
+          // @ts-ignore
+          for (const key in updates) {
+            if (Object.prototype.hasOwnProperty.call(updates, key)) {
+              // @ts-ignore
+              if (currentToast[key] !== updates[key]) {
+                propertiesDiffer = true;
+                break;
+              }
+            }
+          }
+          if (propertiesDiffer) {
+            toastActuallyChanged = true;
+            return { ...currentToast, ...updates };
+          }
         }
         return t;
       });
-      return changed ? { ...state, toasts: newToasts } : state;
+      return toastActuallyChanged ? { ...state, toasts: newToasts } : state;
     }
 
     case "DISMISS_TOAST": {
@@ -155,8 +169,6 @@ function toast({ ...props }: Toast) {
       toast: { ...props, id },
     })
   
-  // This specific dismiss function is for the onOpenChange callback,
-  // it needs to capture the correct 'id'.
   const dismissForThisToast = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 
   dispatch({
@@ -165,6 +177,7 @@ function toast({ ...props }: Toast) {
       ...props,
       id,
       open: true,
+      duration: Infinity, // Prevent auto-close from Radix default duration
       onOpenChange: (open) => {
         if (!open) dismissForThisToast()
       },
@@ -173,7 +186,7 @@ function toast({ ...props }: Toast) {
 
   return {
     id: id,
-    dismiss: dismissForThisToast, // The dismiss function specific to this toast id
+    dismiss: dismissForThisToast,
     update,
   }
 }
@@ -189,12 +202,12 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, []) // Empty dependency array: subscribe on mount, unsubscribe on unmount
+  }, [])
 
   return {
     ...state,
-    toast, // `toast` utility function
-    dismiss: React.useCallback((toastId?: string) => { // General dismiss function
+    toast,
+    dismiss: React.useCallback((toastId?: string) => {
       dispatch({ type: "DISMISS_TOAST", toastId })
     }, []),
   }

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Landmark, WalletCards, Newspaper, UsersRound, Settings2, ShieldAlert, Target, Banknote, PawPrint } from 'lucide-react';
 import { DebtOverview } from '@/components/debt-overview';
@@ -39,7 +39,7 @@ const features = [
   { id: "preferences", label: "Preferences", icon: Settings2, component: <PreferencesSetup /> },
 ];
 
-const WELCOME_STORAGE_KEY = 'ascendiaWelcomeShown_v2';
+const WELCOME_STORAGE_KEY = 'ascendiaWelcomeShown_v2'; // Key updated due to app name change
 
 export function AppShell() {
   const [activeTab, setActiveTab] = useState(features[0].id);
@@ -53,7 +53,7 @@ export function AppShell() {
       setShowWelcome(true);
     }
     
-    const lastTab = localStorage.getItem('ascendiaActiveTab_v2');
+    const lastTab = localStorage.getItem('ascendiaActiveTab_v2'); // Key updated
     if (lastTab && features.some(f => f.id === lastTab)) {
       setActiveTab(lastTab);
     }
@@ -62,16 +62,16 @@ export function AppShell() {
 
   useEffect(() => {
     if (isMounted) {
-      localStorage.setItem('ascendiaActiveTab_v2', activeTab);
+      localStorage.setItem('ascendiaActiveTab_v2', activeTab); // Key updated
     }
   }, [activeTab, isMounted]);
 
-  const handleWelcomeDismiss = () => {
+  const handleWelcomeDismiss = useCallback(() => {
     setShowWelcome(false);
     localStorage.setItem(WELCOME_STORAGE_KEY, 'true');
-  };
+  }, []); // setShowWelcome is stable, localStorage is a side effect
 
-  const handleWelcomeOpenChange = (isOpen: boolean) => {
+  const handleWelcomeOpenChange = useCallback((isOpen: boolean) => {
     // This handler is for when Radix signals a state change (e.g., Escape key, overlay click)
     if (!isOpen) {
       setShowWelcome(false);
@@ -80,7 +80,7 @@ export function AppShell() {
     // If Radix signals isOpen is true, we don't call setShowWelcome(true) here
     // as it might be part of a loop if showWelcome is already true.
     // The initial opening is handled by the useEffect.
-  };
+  }, []); // setShowWelcome is stable, localStorage is a side effect
 
 
   if (!isMounted) {

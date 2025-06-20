@@ -17,6 +17,9 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+    // If your logo.png is served from the same domain (public folder),
+    // you don't strictly need to add it to remotePatterns.
+    // However, if you were using an external CDN for your logo, you would add it here.
   },
 };
 

@@ -90,6 +90,7 @@ export const reducer = (state: State, action: Action): State => {
           const currentToast = t;
           const updates = action.toast;
           let propertiesDiffer = false;
+          // Check if any property in updates is different from currentToast
           for (const key in updates) {
             if (Object.prototype.hasOwnProperty.call(updates, key) && key !== 'id') {
               // @ts-ignore
@@ -99,6 +100,7 @@ export const reducer = (state: State, action: Action): State => {
               }
             }
           }
+
           if (propertiesDiffer) {
             toastActuallyChanged = true;
             return { ...currentToast, ...updates };
@@ -111,22 +113,37 @@ export const reducer = (state: State, action: Action): State => {
 
     case "DISMISS_TOAST": {
       const { toastId } = action;
-      let changed = false;
 
-      const newToasts = state.toasts.map((t: ToasterToast) => {
-        if (toastId === undefined || t.id === toastId) {
-          if (t.open !== false) { 
-            changed = true;
-            addToRemoveQueue(t.id); 
-            return { ...t, open: false }; 
+      if (toastId === undefined) { // Dismiss all
+        let aToastWasOpen = false;
+        const newToasts = state.toasts.map((t) => {
+          if (t.open) {
+            aToastWasOpen = true;
+            addToRemoveQueue(t.id);
+            return { ...t, open: false };
           }
-        }
-        return t;
-      });
-      
-      return changed ? { ...state, toasts: newToasts } : state;
+          return t;
+        });
+        return aToastWasOpen ? { ...state, toasts: newToasts } : state;
+
+      } else { // Dismiss specific toast
+        let toastFoundAndWasOpen = false;
+        const newToasts = state.toasts.map((t) => {
+          if (t.id === toastId && t.open) { // Check if it's currently open
+            toastFoundAndWasOpen = true;
+            addToRemoveQueue(t.id);
+            return { ...t, open: false };
+          }
+          return t;
+        });
+        return toastFoundAndWasOpen ? { ...state, toasts: newToasts } : state;
+      }
     }
     case "REMOVE_TOAST": {
+      if (action.toastId !== undefined && toastTimeouts.has(action.toastId)) {
+        clearTimeout(toastTimeouts.get(action.toastId)!);
+        toastTimeouts.delete(action.toastId);
+      }
       if (action.toastId === undefined) {
         return state.toasts.length === 0 ? state : { ...state, toasts: [] };
       }
@@ -141,38 +158,30 @@ const listeners: Array<(state: State) => void> = []
 let memoryState: State = { toasts: [] }
 
 function dispatch(action: Action) {
-  memoryState = reducer(memoryState, action)
-  listeners.forEach((listener) => {
-    listener(memoryState)
-  })
+  const previousStateReference = memoryState;
+  const newState = reducer(memoryState, action);
+
+  if (newState !== previousStateReference) { // Only proceed if the state object reference has changed
+    memoryState = newState;
+    listeners.forEach((listener) => {
+      listener(memoryState);
+    });
+  }
 }
 
 type Toast = Omit<ToasterToast, "id" | "open" | "onOpenChange" | "duration">
 
 function toast({ ...props }: Toast) {
   const id = genId();
-  
+
   const onOpenChangeHandler = (openFromRadix: boolean) => {
-    if (!openFromRadix) {
-      setTimeout(() => { // Make the dispatch asynchronous
+    if (!openFromRadix) { // Only act if Radix is signalling a close
+      // Using setTimeout to break potential synchronous loops
+      setTimeout(() => {
         dispatch({ type: "DISMISS_TOAST", toastId: id });
       }, 0);
     }
   };
-
-  const dismissThisToast = () => {
-    dispatch({
-      type: "DISMISS_TOAST",
-      toastId: id,
-    });
-  };
-
-  const updateThisToast = (updateProps: Partial<Omit<ToasterToast, 'id' | 'open' | 'onOpenChange' | 'duration'>>) =>
-    dispatch({
-      type: "UPDATE_TOAST",
-      // @ts-ignore
-      toast: { ...updateProps, id },
-    });
 
   dispatch({
     type: "ADD_TOAST",
@@ -180,15 +189,20 @@ function toast({ ...props }: Toast) {
       ...props,
       id,
       open: true,
-      duration: Infinity, 
+      duration: Infinity, // Make toasts persistent until explicitly closed
       onOpenChange: onOpenChangeHandler,
     },
   });
 
   return {
     id: id,
-    dismiss: dismissThisToast,
-    update: updateThisToast,
+    dismiss: () => dispatch({ type: "DISMISS_TOAST", toastId: id }),
+    update: (updateProps: Partial<Omit<ToasterToast, 'id' | 'open' | 'onOpenChange' | 'duration'>>) =>
+      dispatch({
+        type: "UPDATE_TOAST",
+        // @ts-ignore
+        toast: { ...updateProps, id },
+      }),
   };
 }
 
@@ -203,7 +217,7 @@ function useToast() {
         listeners.splice(index, 1);
       }
     };
-  }, []); 
+  }, []); // Empty dependency array means this effect runs once on mount and cleanup on unmount
 
   const stableDismiss = React.useCallback((toastId?: string) => {
     dispatch({ type: "DISMISS_TOAST", toastId });

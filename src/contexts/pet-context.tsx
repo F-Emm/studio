@@ -44,7 +44,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
       if (savedProfileString) {
         const parsedProfile = JSON.parse(savedProfileString) as PetProfile;
         if (parsedProfile.petId && parsedProfile.hasOwnProperty('consecutiveLoginDays') && parsedProfile.type && parsedProfile.stage) {
-          profileToInitialize = { ...getDefaultPetProfile(parsedProfile.userId), ...parsedProfile }; // Ensure all default fields exist
+          profileToInitialize = { ...getDefaultPetProfile(parsedProfile.userId), ...parsedProfile }; 
         } else {
           profileToInitialize = getDefaultPetProfile(parsedProfile.userId || "defaultUser");
           if(parsedProfile.name) profileToInitialize.name = parsedProfile.name;
@@ -81,7 +81,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
           initialToastsForLoginQueue.push({ title: "Login Streak Bonus!", description: `${profileToInitialize.consecutiveLoginDays} consecutive days! +${bonusTreats} extra treats for ${profileToInitialize.name}!`});
         }
         profileToInitialize.lastLoginDate = today;
-        profileToInitialize.processedOverdueDebtsToday = {}; // Reset for the new day
+        profileToInitialize.processedOverdueDebtsToday = {}; 
       }
       
       setPetProfile(profileToInitialize);
@@ -143,17 +143,17 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
 
       if (evolvedThisUpdate) {
         setToastQueue(q => [...q, { title: "Evolution!", description: `${updated.name} evolved to ${newStage}!` }]);
-        return { ...updated, stage: newStage };
+        return { ...updated, stage: newStage, happiness: Math.min(MAX_STAT_VALUE, updated.happiness + 20), energy: MAX_STAT_VALUE };
       }
       return updated;
     });
   }, [setToastQueue]);
 
   const gainXp = useCallback((amount: number, silent: boolean = false) => {
-    if (!silent && petProfile) {
-      setToastQueue(q => [...q, { title: "XP Gained!", description: `${petProfile.name} got +${amount} XP!` }]);
-    }
     updatePetState(prev => {
+      if (!silent) {
+         setToastQueue(q => [...q, { title: "XP Gained!", description: `${prev.name} got +${amount} XP!` }]);
+      }
       return { 
         ...prev, 
         xp: prev.xp + amount,
@@ -161,7 +161,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
         lastInteraction: new Date().toISOString() 
       };
     });
-  }, [updatePetState, setToastQueue, petProfile]);
+  }, [updatePetState, setToastQueue]);
 
   const updateStat = useCallback((stat: keyof Pick<PetProfile, 'hunger' | 'happiness' | 'energy'>, amount: number) => {
     updatePetState(prev => {
@@ -172,16 +172,15 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
 
   const rewardTreats = useCallback((amount: number, reason?: string) => {
     updatePetState(prev => {
-      if (reason && petProfile) {
-         setToastQueue(q => [...q, { title: "Treats Rewarded!", description: `${reason} +${amount} treats for ${petProfile.name}!` }]);
+      if (reason) {
+         setToastQueue(q => [...q, { title: "Treats Rewarded!", description: `${reason} +${amount} treats for ${prev.name}!` }]);
       }
       return { ...prev, treats: prev.treats + amount };
     });
-  }, [updatePetState, setToastQueue, petProfile]);
+  }, [updatePetState, setToastQueue]);
 
   const feedPet = useCallback((treatCost: number = 1): boolean => {
     let fedSuccessfully = false;
-    const currentPetName = petProfile?.name || "Your pet";
     
     updatePetState(prev => {
       if (prev.treats >= treatCost) {
@@ -200,7 +199,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
       return prev;
     });
     return fedSuccessfully;
-  }, [updatePetState, setToastQueue, petProfile]);
+  }, [updatePetState, setToastQueue]);
 
   const renamePet = useCallback((newName: string) => {
     if (newName.trim()) {
@@ -220,6 +219,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
         let newEnergy = prev.energy;
         let eventToastMessage: ToastMessage | null = null;
         const today = new Date().toISOString().split('T')[0];
+        let updatedProcessedDebts = { ...prev.processedOverdueDebtsToday };
 
         switch (type) {
             case 'goalSet':
@@ -245,12 +245,12 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
             case 'debtOverdue':
                 if (data && data.debtId) {
                     if (prev.processedOverdueDebtsToday[data.debtId] === today) {
-                        return prev; // Already processed this debt today
+                        return prev; 
                     }
                     newHappiness = Math.max(MIN_STAT_VALUE, newHappiness - 15);
                     newEnergy = Math.max(MIN_STAT_VALUE, newEnergy - 10);
                     eventToastMessage = { title: "Debt Overdue!", description: `${data.debtName ? `Overdue: ${data.debtName}. ` : ''}${prev.name} is worried. Happiness -15, Energy -10`, variant: "destructive" };
-                    prev.processedOverdueDebtsToday[data.debtId] = today;
+                    updatedProcessedDebts[data.debtId] = today;
                 }
                 break;
         }
@@ -266,9 +266,10 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
             happiness: newHappiness,
             energy: newEnergy,
             lastInteraction: new Date().toISOString(),
+            processedOverdueDebtsToday: updatedProcessedDebts,
         };
     });
-  }, [updatePetState, setToastQueue, petProfile]);
+  }, [updatePetState, setToastQueue]); // Removed petProfile from dependencies
 
   useEffect(() => {
     const decayInterval = setInterval(() => {
@@ -284,7 +285,7 @@ export const PetProvider = ({ children }: { children: ReactNode }) => {
           }));
         }
       }
-    }, 15 * 60 * 1000);
+    }, 15 * 60 * 1000); // Check every 15 minutes
     return () => clearInterval(decayInterval);
   }, [petProfile, isLoading, updatePetState]);
 

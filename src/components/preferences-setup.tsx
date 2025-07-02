@@ -119,11 +119,11 @@ export function PreferencesSetup() {
         <form onSubmit={handleSubmit(onSubmit)}>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="monthlyIncome" className="flex items-center"><DollarSign className="mr-2 h-4 w-4 text-muted-foreground" />Monthly Income (Optional)</Label>
+              <Label htmlFor="monthlyIncome" className="flex items-center"><DollarSign className="mr-2 h-4 w-4 text-muted-foreground" />Monthly Income (XAF, Optional)</Label>
               <Controller
                 name="monthlyIncome"
                 control={control}
-                render={({ field }) => <Input id="monthlyIncome" type="number" placeholder="e.g., 3000" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} value={field.value ?? ""} />}
+                render={({ field }) => <Input id="monthlyIncome" type="number" placeholder="e.g., 300000" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} value={field.value ?? ""} />}
               />
               {errors.monthlyIncome && <p className="text-sm text-destructive">{errors.monthlyIncome.message}</p>}
             </div>
@@ -188,3 +188,5 @@ export function PreferencesSetup() {
     </div>
   );
 }
+
+    

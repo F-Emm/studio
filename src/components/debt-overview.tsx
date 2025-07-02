@@ -124,7 +124,7 @@ export function DebtOverview() {
             Overall Debt Summary
           </CardTitle>
           <CardDescription>
-            Total Debt: ${totalDebtAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} | Total Paid: ${totalPaidAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+            Total Debt: {totalDebtAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} XAF | Total Paid: {totalPaidAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} XAF
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -160,7 +160,7 @@ export function DebtOverview() {
                 </Select>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="totalAmount" className="text-right">Total Amount</Label>
+                <Label htmlFor="totalAmount" className="text-right">Total Amount (XAF)</Label>
                 <Input id="totalAmount" type="number" value={newDebt.totalAmount} onChange={(e) => setNewDebt({...newDebt, totalAmount: e.target.value})} className="col-span-3" />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -211,7 +211,7 @@ export function DebtOverview() {
               </CardHeader>
               <CardContent>
                 <div className="text-sm mb-2">
-                  <span className="font-semibold">${debt.paidAmount.toLocaleString()}</span> paid out of ${debt.totalAmount.toLocaleString()}
+                  <span className="font-semibold">{debt.paidAmount.toLocaleString()} XAF</span> paid out of {debt.totalAmount.toLocaleString()} XAF
                 </div>
                 <Progress value={progress} className="w-full h-2.5" aria-label={`${debt.name} progress: ${progress.toFixed(2)}% paid`} />
                 {debt.dueDate && (
@@ -245,3 +245,4 @@ export function DebtOverview() {
   );
 }
 
+    

@@ -200,12 +200,12 @@ export function GoalSetting() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="targetAmount">Target Amount ($)</Label>
-                <Input id="targetAmount" type="number" value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} placeholder="e.g., 1000" required step="0.01" />
+                <Label htmlFor="targetAmount">Target Amount (XAF)</Label>
+                <Input id="targetAmount" type="number" value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} placeholder="e.g., 1000000" required step="1" />
               </div>
               <div>
-                <Label htmlFor="currentAmount">Current Amount ($)</Label>
-                <Input id="currentAmount" type="number" value={currentAmount} onChange={(e) => setCurrentAmount(e.target.value)} placeholder="e.g., 100" step="0.01" />
+                <Label htmlFor="currentAmount">Current Amount (XAF)</Label>
+                <Input id="currentAmount" type="number" value={currentAmount} onChange={(e) => setCurrentAmount(e.target.value)} placeholder="e.g., 100000" step="1" />
               </div>
             </div>
             <div>
@@ -269,13 +269,13 @@ export function GoalSetting() {
                         </div>
                       </div>
                       <CardDescription>
-                        Target: ${goal.targetAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        Target: {goal.targetAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} XAF
                         {goal.targetDate && isValid(goal.targetDate) ? ` | Due: ${format(goal.targetDate, "PPP")}` : ''}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="mb-2">
-                        <span className="font-semibold">${goal.currentAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span> saved
+                        <span className="font-semibold">{goal.currentAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} XAF</span> saved
                         ({progress.toFixed(1)}%)
                       </div>
                       <Progress value={progress} className="w-full h-2.5" aria-label={`${goal.name} progress: ${progress.toFixed(1)}% complete`} />
@@ -296,3 +296,5 @@ export function GoalSetting() {
     </div>
   );
 }
+
+    

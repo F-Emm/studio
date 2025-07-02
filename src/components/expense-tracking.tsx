@@ -138,8 +138,8 @@ export function ExpenseTracking() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="amount">Amount ($)</Label>
-                <Input id="amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g., 5.00" required step="0.01" />
+                <Label htmlFor="amount">Amount (XAF)</Label>
+                <Input id="amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g., 500" required step="1" />
               </div>
               <div>
                 <Label htmlFor="category">Category</Label>
@@ -164,7 +164,7 @@ export function ExpenseTracking() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl font-headline">Spending Overview</CardTitle>
-            <CardDescription>Total spent: ${totalExpenses.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</CardDescription>
+            <CardDescription>Total spent: {totalExpenses.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} XAF</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
              {pieChartData.length > 0 ? (
@@ -214,7 +214,7 @@ export function ExpenseTracking() {
                         </span>
                       </TableCell>
                       <TableCell>{new Date(expense.date).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-right">${expense.amount.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">{expense.amount.toFixed(2)} XAF</TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="sm" onClick={() => setExpenses(expenses.filter(e => e.id !== expense.id))}>✕</Button>
                       </TableCell>
@@ -231,3 +231,5 @@ export function ExpenseTracking() {
     </div>
   );
 }
+
+    

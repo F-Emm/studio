@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { usePet } from '@/contexts/pet-context';
 import { isPast, isValid, parseISO } from 'date-fns';
 
-interface Debt {
+export interface Debt {
   id: string;
   name: string;
   category: string;
@@ -244,5 +244,3 @@ export function DebtOverview() {
     </div>
   );
 }
-
-    

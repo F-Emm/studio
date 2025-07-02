@@ -1,10 +1,10 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from 'react'; // Added useCallback
+import { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Landmark, WalletCards, Newspaper, UsersRound, Settings2, ShieldAlert, Target, Banknote, PawPrint } from 'lucide-react';
-import { DebtOverview } from '@/components/debt-overview';
+import { DebtOverview, type Debt } from '@/components/debt-overview';
 import { ExpenseTracking } from '@/components/expense-tracking';
 import { ArticleSummarization } from '@/components/article-summarization';
 import { CommunityForum } from '@/components/community-forum';
@@ -25,8 +25,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { addDays, format, isWithinInterval, parseISO } from 'date-fns';
 
 const features = [
   { id: "debt", label: "Debt Overview", icon: Landmark, component: <DebtOverview /> },
@@ -59,6 +59,73 @@ export function AppShell() {
     }
 
   }, []);
+  
+  // Notification Handler
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const handleNotifications = async () => {
+      // 1. Check preferences
+      const prefsString = localStorage.getItem("userPreferences");
+      if (!prefsString) return;
+      const preferences = JSON.parse(prefsString);
+      if (!preferences.enableNotifications) return;
+
+      // 2. Check permission
+      if (!("Notification" in window)) {
+        console.error("This browser does not support desktop notification");
+        return;
+      }
+      if (Notification.permission === 'denied') return;
+      if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+      }
+      
+      // 3. Get last notification state
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const lastNotifsString = localStorage.getItem('ascendiaLastNotifications');
+      const lastNotifications = lastNotifsString ? JSON.parse(lastNotifsString) : { dailyNudge: null, debtReminders: {} };
+
+      // 4. Daily Nudge
+      if (lastNotifications.dailyNudge !== todayStr) {
+        new Notification('Ascendia Daily Check-in', {
+          body: 'Time to update your budget and check on your financial pet!',
+          icon: '/logo.png'
+        });
+        lastNotifications.dailyNudge = todayStr;
+      }
+
+      // 5. Debt Reminders
+      const debtsString = localStorage.getItem("userDebts");
+      if (!debtsString) return;
+      const debts: Debt[] = JSON.parse(debtsString);
+      const now = new Date();
+      const reminderThreshold = addDays(now, 7);
+
+      debts.forEach(debt => {
+        if (debt.dueDate) {
+          const dueDate = parseISO(debt.dueDate);
+          if (isWithinInterval(dueDate, { start: now, end: reminderThreshold })) {
+            if (lastNotifications.debtReminders[debt.id] !== todayStr) {
+              new Notification('Loan Payment Reminder', {
+                body: `Your payment for "${debt.name}" is due on ${format(dueDate, 'PPP')}.`,
+                icon: '/logo.png'
+              });
+              lastNotifications.debtReminders[debt.id] = todayStr;
+            }
+          }
+        }
+      });
+
+      // 6. Save updated notification state
+      localStorage.setItem('ascendiaLastNotifications', JSON.stringify(lastNotifications));
+    };
+
+    const timer = setTimeout(handleNotifications, 5000); // Delay to not be intrusive on load
+    return () => clearTimeout(timer);
+
+  }, [isMounted]);
 
   useEffect(() => {
     if (isMounted) {
@@ -69,18 +136,14 @@ export function AppShell() {
   const handleWelcomeDismiss = useCallback(() => {
     setShowWelcome(false);
     localStorage.setItem(WELCOME_STORAGE_KEY, 'true');
-  }, []); // setShowWelcome is stable, localStorage is a side effect
+  }, []);
 
   const handleWelcomeOpenChange = useCallback((isOpen: boolean) => {
-    // This handler is for when Radix signals a state change (e.g., Escape key, overlay click)
     if (!isOpen) {
       setShowWelcome(false);
       localStorage.setItem(WELCOME_STORAGE_KEY, 'true');
     }
-    // If Radix signals isOpen is true, we don't call setShowWelcome(true) here
-    // as it might be part of a loop if showWelcome is already true.
-    // The initial opening is handled by the useEffect.
-  }, []); // setShowWelcome is stable, localStorage is a side effect
+  }, []);
 
 
   if (!isMounted) {

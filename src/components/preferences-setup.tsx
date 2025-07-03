@@ -118,61 +118,58 @@ export function PreferencesSetup() {
     setUploadProgress(null);
 
     try {
-        const updates: { displayName: string; photoURL?: string } = {
-            displayName: displayName.trim() || 'Anonymous',
-        };
+      const updates: { displayName: string; photoURL?: string } = {
+        displayName: displayName.trim() || user.displayName || 'Anonymous',
+      };
 
-        if (profileImageFile) {
-            const fileExtension = profileImageFile.name.split('.').pop();
-            const imagePath = `users/${user.uid}/profilePicture/${uuidv4()}.${fileExtension}`;
-            const storageRef = ref(storage, imagePath);
-            const uploadTask = uploadBytesResumable(storageRef, profileImageFile);
+      // Only proceed with upload if a file was selected
+      if (profileImageFile) {
+        const fileExtension = profileImageFile.name.split('.').pop();
+        const imagePath = `users/${user.uid}/profilePicture/${uuidv4()}.${fileExtension}`;
+        const storageRef = ref(storage, imagePath);
+        const uploadTask = uploadBytesResumable(storageRef, profileImageFile);
 
-            const downloadURL = await new Promise<string>((resolve, reject) => {
-                uploadTask.on(
-                    'state_changed',
-                    (snapshot: UploadTaskSnapshot) => {
-                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                        setUploadProgress(progress);
-                    },
-                    (error) => {
-                        console.error("Upload failed:", error);
-                        reject(error);
-                    },
-                    async () => {
-                        const url = await getDownloadURL(uploadTask.snapshot.ref);
-                        resolve(url);
-                    }
-                );
-            });
-            updates.photoURL = downloadURL;
-        }
+        const downloadURL = await new Promise<string>((resolve, reject) => {
+          uploadTask.on(
+            'state_changed',
+            (snapshot: UploadTaskSnapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
+            },
+            (error) => reject(error),
+            async () => {
+              const url = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(url);
+            }
+          );
+        });
+        updates.photoURL = downloadURL;
+      }
 
-        const hasNameChanged = updates.displayName !== (firestoreUser?.displayName || '');
-        const hasPhotoChanged = 'photoURL' in updates;
+      // Check if anything actually changed
+      const hasNameChanged = updates.displayName !== (firestoreUser?.displayName || '');
+      const hasPhotoChanged = 'photoURL' in updates && updates.photoURL !== (firestoreUser?.photoURL || '');
 
-        if (hasNameChanged || hasPhotoChanged) {
-            await updateProfile(auth.currentUser, updates);
-            await updateDoc(doc(db, "users", user.uid), updates);
-            toast({ title: "Profile Updated", description: "Your profile information has been saved." });
-        } else {
-            toast({ title: "No Changes", description: "Your profile information is up to date." });
-        }
-        
-        setProfileImageFile(null);
+      if (hasNameChanged || hasPhotoChanged) {
+        await updateProfile(auth.currentUser, updates);
+        await updateDoc(doc(db, "users", user.uid), updates);
+        toast({ title: "Profile Updated", description: "Your profile information has been saved." });
+      } else {
+        toast({ title: "No Changes", description: "Your profile information is up to date." });
+      }
+      
+      setProfileImageFile(null);
 
     } catch (error: any) {
-        console.error("Error updating profile:", error);
-        let errorMessage = "Could not save your profile. Please try again.";
-        if (error.code === 'storage/unauthorized') {
-            errorMessage = "Image upload failed due to permissions. Please check your Firebase Storage security rules.";
-        } else if (error.message) {
-            errorMessage = `Could not save your profile. ${error.message}`;
-        }
-        toast({ title: "Update Failed", description: errorMessage, variant: "destructive" });
+      console.error("Error updating profile:", error);
+      let errorMessage = "Could not save your profile. Please try again.";
+      if (error.code === 'storage/unauthorized') {
+        errorMessage = "Image upload failed due to permissions. Please check your Firebase Storage security rules.";
+      }
+      toast({ title: "Update Failed", description: errorMessage, variant: "destructive" });
     } finally {
-        setIsSavingProfile(false);
-        setUploadProgress(null);
+      setIsSavingProfile(false);
+      setUploadProgress(null);
     }
   };
 

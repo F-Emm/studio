@@ -232,6 +232,7 @@ export function CommunityForum() {
         let downloadURL: string | null = null;
         let imagePathValue: string | null = null;
         
+        // Step 1: Upload image if it exists
         if (postImageFile) {
             const imageId = uuidv4();
             imagePathValue = `posts/${postDocRef.id}/${imageId}`; // Use the post ID in the path
@@ -244,10 +245,7 @@ export function CommunityForum() {
                         const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                         setUploadProgress(progress);
                     },
-                    (error) => {
-                        console.error("Upload failed", error);
-                        reject(error);
-                    },
+                    (error) => reject(error),
                     async () => {
                         const url = await getDownloadURL(uploadTask.snapshot.ref);
                         resolve(url);
@@ -256,6 +254,7 @@ export function CommunityForum() {
             });
         }
         
+        // Step 2: Create the post document with all data
         await setDoc(postDocRef, {
             authorId: user.uid,
             authorName: user.displayName || "Anonymous",
@@ -278,8 +277,6 @@ export function CommunityForum() {
       let errorMessage = "Could not create your post. Please try again.";
       if (error.code === 'storage/unauthorized') {
           errorMessage = "Image upload failed due to permissions. Please check your Firebase Storage security rules.";
-      } else if (error.message) {
-          errorMessage = `Could not create your post. ${error.message}`;
       }
       toast({ title: "Error Creating Post", description: errorMessage, variant: "destructive" });
     } finally {

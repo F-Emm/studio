@@ -118,7 +118,7 @@ export function PreferencesSetup() {
     setUploadProgress(null);
 
     try {
-      let photoURL = firestoreUser?.photoURL || null;
+      let newPhotoURL = firestoreUser?.photoURL || null;
 
       if (profileImageFile) {
         const fileExtension = profileImageFile.name.split('.').pop();
@@ -126,7 +126,7 @@ export function PreferencesSetup() {
         const storageRef = ref(storage, imagePath);
         const uploadTask = uploadBytesResumable(storageRef, profileImageFile);
 
-        await new Promise<void>((resolve, reject) => {
+        newPhotoURL = await new Promise<string>((resolve, reject) => {
             uploadTask.on('state_changed',
                 (snapshot: UploadTaskSnapshot) => {
                     const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
@@ -137,17 +137,17 @@ export function PreferencesSetup() {
                     reject(error);
                 },
                 async () => {
-                    photoURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    resolve();
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    resolve(downloadURL);
                 }
             );
         });
       }
 
-      const updatedData: { displayName: string, photoURL?: string | null } = { displayName: displayName || 'Anonymous' };
-      if (photoURL !== firestoreUser?.photoURL) {
-        updatedData.photoURL = photoURL;
-      }
+      const updatedData = {
+        displayName: displayName || 'Anonymous',
+        photoURL: newPhotoURL,
+      };
       
       await updateProfile(auth.currentUser, updatedData);
       await updateDoc(doc(db, "users", user.uid), updatedData);
@@ -163,6 +163,7 @@ export function PreferencesSetup() {
       setUploadProgress(null);
     }
   };
+
 
   const onBudgetSubmit = (data: PreferencesFormData) => {
     localStorage.setItem("userPreferences", JSON.stringify(data));

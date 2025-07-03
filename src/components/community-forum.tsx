@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, Timestamp, doc, updateDoc, arrayUnion, arrayRemove, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, Timestamp, doc, updateDoc, arrayUnion, arrayRemove, deleteDoc, getDocs, setDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject, type UploadTaskSnapshot } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -81,8 +81,9 @@ function CommentsSheet({ post }: { post: Post }) {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             setComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Comment)));
         }, (error) => {
-            console.error("Error fetching comments: ", error);
-            // This can happen on logout if the listener is still active, so we don't toast.
+            if (error.code !== 'permission-denied') {
+                console.error("Error fetching comments: ", error);
+            }
         });
 
         return () => unsubscribe();
@@ -184,6 +185,10 @@ export function CommunityForum() {
         const commentsRef = collection(db, "posts", doc.id, "comments");
         const promise = getDocs(commentsRef).then(commentsSnapshot => {
             setCommentCounts(prev => ({...prev, [doc.id]: commentsSnapshot.size }));
+        }).catch(error => {
+           if (error.code !== 'permission-denied') {
+             console.error("Error fetching comment counts for post " + doc.id, error);
+           }
         });
         commentCountPromises.push(promise);
       });
@@ -198,15 +203,13 @@ export function CommunityForum() {
                 console.error("Error fetching comment counts:", error);
                 toast({ title: "Error", description: "Could not load comment counts.", variant: "destructive" });
             }
-            // Even if comment counts fail (e.g. on logout), we should still show the posts.
             setPosts(postsData);
             setIsLoadingPosts(false);
         });
 
     }, (error) => {
-      console.error("Error fetching posts: ", error);
-      // Don't toast permission errors, as they can happen during logout.
       if (error.code !== 'permission-denied') {
+        console.error("Error fetching posts: ", error);
         toast({ title: "Error", description: "Could not fetch community posts.", variant: "destructive" });
       }
       setIsLoadingPosts(false);
@@ -227,24 +230,16 @@ export function CommunityForum() {
     try {
         let downloadURL: string | null = null;
         let imagePath: string | null = null;
-
-        const postDocRef = await addDoc(collection(db, "posts"), {
-            authorId: user.uid,
-            authorName: user.displayName || "Anonymous",
-            authorAvatarUrl: user.photoURL || null,
-            content: newPostContent,
-            timestamp: serverTimestamp(),
-            likedBy: [],
-            imageUrl: null,
-            imagePath: null
-        });
+        
+        // Create the document reference first to get a stable ID
+        const postDocRef = doc(collection(db, "posts"));
 
         if (postImageFile) {
             imagePath = `posts/${postDocRef.id}/${uuidv4()}`;
             const storageRef = ref(storage, imagePath);
             const uploadTask = uploadBytesResumable(storageRef, postImageFile);
             
-            await new Promise<void>((resolve, reject) => {
+            downloadURL = await new Promise<string>((resolve, reject) => {
                 uploadTask.on('state_changed', 
                     (snapshot: UploadTaskSnapshot) => {
                         const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
@@ -255,16 +250,23 @@ export function CommunityForum() {
                         reject(error);
                     },
                     async () => {
-                        downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                        await updateDoc(postDocRef, {
-                            imageUrl: downloadURL,
-                            imagePath: imagePath,
-                        });
-                        resolve();
+                        const url = await getDownloadURL(uploadTask.snapshot.ref);
+                        resolve(url);
                     }
                 );
             });
         }
+        
+        await setDoc(postDocRef, {
+            authorId: user.uid,
+            authorName: user.displayName || "Anonymous",
+            authorAvatarUrl: user.photoURL || null,
+            content: newPostContent,
+            timestamp: serverTimestamp(),
+            likedBy: [],
+            imageUrl: downloadURL,
+            imagePath: imagePath,
+        });
         
       setNewPostContent('');
       setPostImageFile(null);
@@ -301,7 +303,7 @@ export function CommunityForum() {
             const imageRef = ref(storage, post.imagePath);
             await deleteObject(imageRef);
         }
-        // Also delete comments subcollection if needed - for now just delete the post
+        // TODO: Delete comments subcollection for production apps
         await deleteDoc(doc(db, "posts", post.id));
         toast({ title: "Post Deleted", description: "Your post has been removed."});
     } catch (error) {

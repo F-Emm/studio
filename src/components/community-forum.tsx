@@ -156,7 +156,12 @@ export function CommunityForum() {
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const postsData: Post[] = [];
       querySnapshot.forEach((doc) => {
-        postsData.push({ id: doc.id, ...doc.data() } as Post);
+        const data = doc.data();
+        postsData.push({
+          id: doc.id,
+          ...data,
+          likedBy: data.likedBy || [], // FIX: Ensure likedBy is always an array
+        } as Post);
       });
       setPosts(postsData);
       setIsLoadingPosts(false);

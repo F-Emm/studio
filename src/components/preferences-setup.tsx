@@ -118,49 +118,55 @@ export function PreferencesSetup() {
     setUploadProgress(null);
 
     try {
-      let newPhotoURL = firestoreUser?.photoURL || null;
+        const updates: { displayName: string; photoURL?: string } = {
+            displayName: displayName.trim() || 'Anonymous',
+        };
 
-      if (profileImageFile) {
-        const fileExtension = profileImageFile.name.split('.').pop();
-        const imagePath = `users/${user.uid}/profilePicture/${uuidv4()}.${fileExtension}`;
-        const storageRef = ref(storage, imagePath);
-        const uploadTask = uploadBytesResumable(storageRef, profileImageFile);
+        if (profileImageFile) {
+            const fileExtension = profileImageFile.name.split('.').pop();
+            const imagePath = `users/${user.uid}/profilePicture/${uuidv4()}.${fileExtension}`;
+            const storageRef = ref(storage, imagePath);
+            const uploadTask = uploadBytesResumable(storageRef, profileImageFile);
 
-        newPhotoURL = await new Promise<string>((resolve, reject) => {
-            uploadTask.on('state_changed',
-                (snapshot: UploadTaskSnapshot) => {
-                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                    setUploadProgress(progress);
-                },
-                (error) => {
-                    console.error("Upload failed:", error);
-                    reject(error);
-                },
-                async () => {
-                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    resolve(downloadURL);
-                }
-            );
-        });
-      }
+            const downloadURL = await new Promise<string>((resolve, reject) => {
+                uploadTask.on(
+                    'state_changed',
+                    (snapshot: UploadTaskSnapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        setUploadProgress(progress);
+                    },
+                    (error) => {
+                        console.error("Upload failed:", error);
+                        reject(error);
+                    },
+                    async () => {
+                        const url = await getDownloadURL(uploadTask.snapshot.ref);
+                        resolve(url);
+                    }
+                );
+            });
+            updates.photoURL = downloadURL;
+        }
 
-      const updatedData = {
-        displayName: displayName || 'Anonymous',
-        photoURL: newPhotoURL,
-      };
-      
-      await updateProfile(auth.currentUser, updatedData);
-      await updateDoc(doc(db, "users", user.uid), updatedData);
-      
-      toast({ title: "Profile Updated", description: "Your profile information has been saved." });
-      setProfileImageFile(null);
+        const hasNameChanged = updates.displayName !== (firestoreUser?.displayName || '');
+        const hasPhotoChanged = 'photoURL' in updates;
+
+        if (hasNameChanged || hasPhotoChanged) {
+            await updateProfile(auth.currentUser, updates);
+            await updateDoc(doc(db, "users", user.uid), updates);
+            toast({ title: "Profile Updated", description: "Your profile information has been saved." });
+        } else {
+            toast({ title: "No Changes", description: "Your profile information is up to date." });
+        }
+        
+        setProfileImageFile(null);
 
     } catch (error: any) {
-      console.error("Error updating profile:", error);
-      toast({ title: "Update Failed", description: `Could not save your profile. ${error.message}`, variant: "destructive" });
+        console.error("Error updating profile:", error);
+        toast({ title: "Update Failed", description: `Could not save your profile. ${error.message}`, variant: "destructive" });
     } finally {
-      setIsSavingProfile(false);
-      setUploadProgress(null);
+        setIsSavingProfile(false);
+        setUploadProgress(null);
     }
   };
 

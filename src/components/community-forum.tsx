@@ -228,15 +228,14 @@ export function CommunityForum() {
     setUploadProgress(null);
 
     try {
+        const postDocRef = doc(collection(db, "posts")); // Get a ref with a unique ID first
         let downloadURL: string | null = null;
-        let imagePath: string | null = null;
+        let imagePathValue: string | null = null;
         
-        // Create the document reference first to get a stable ID
-        const postDocRef = doc(collection(db, "posts"));
-
         if (postImageFile) {
-            imagePath = `posts/${postDocRef.id}/${uuidv4()}`;
-            const storageRef = ref(storage, imagePath);
+            const imageId = uuidv4();
+            imagePathValue = `posts/${postDocRef.id}/${imageId}`; // Use the post ID in the path
+            const storageRef = ref(storage, imagePathValue);
             const uploadTask = uploadBytesResumable(storageRef, postImageFile);
             
             downloadURL = await new Promise<string>((resolve, reject) => {
@@ -265,7 +264,7 @@ export function CommunityForum() {
             timestamp: serverTimestamp(),
             likedBy: [],
             imageUrl: downloadURL,
-            imagePath: imagePath,
+            imagePath: imagePathValue,
         });
         
       setNewPostContent('');

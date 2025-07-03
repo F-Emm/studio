@@ -49,6 +49,7 @@ export default function SignupPage() {
         uid: user.uid,
         displayName: data.name,
         email: data.email,
+        photoURL: null, // Add photoURL field
         createdAt: new Date().toISOString(),
         hasCompletedOnboarding: false, // For future onboarding flow
       });

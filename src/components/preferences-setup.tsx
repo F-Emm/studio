@@ -11,8 +11,14 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Settings, DollarSign, Target, ListChecks } from "lucide-react";
-import { usePet } from '@/contexts/pet-context'; // Import usePet
+import { Settings, DollarSign, Target, ListChecks, User, Image as ImageIcon, Loader2 } from "lucide-react";
+import { usePet } from '@/contexts/pet-context';
+import { useAuth } from '@/contexts/auth-context';
+import { doc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { updateProfile } from 'firebase/auth';
+import { db, storage, auth } from '@/lib/firebase';
+import Image from 'next/image';
 
 const preferencesSchema = z.object({
   monthlyIncome: z.preprocess(
@@ -43,13 +49,18 @@ const spendingCategories = [
   { id: "entertainment", label: "Entertainment" },
 ] as const;
 
-
 export function PreferencesSetup() {
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
-  const { processFinancialEvent } = usePet(); // Get pet context function
+  const { processFinancialEvent } = usePet();
+  const { user } = useAuth();
   
-  const { control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<PreferencesFormData>({
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+
+  const { control, handleSubmit, reset, formState: { errors, isSubmitting: isSubmittingPrefs } } = useForm<PreferencesFormData>({
     resolver: zodResolver(preferencesSchema),
     defaultValues: {
       monthlyIncome: undefined,
@@ -67,6 +78,10 @@ export function PreferencesSetup() {
 
   useEffect(() => {
     setIsMounted(true);
+    if (user) {
+      setDisplayName(user.displayName || '');
+      setProfileImagePreview(user.photoURL);
+    }
     const savedPrefs = localStorage.getItem("userPreferences");
     if (savedPrefs) {
       try {
@@ -74,24 +89,58 @@ export function PreferencesSetup() {
         const validationResult = preferencesSchema.safeParse(parsedPrefs);
         if (validationResult.success) {
           reset(validationResult.data);
-        } else {
-          console.warn("Invalid preferences found in localStorage", validationResult.error);
         }
       } catch (error) {
         console.error("Error parsing preferences from localStorage", error);
       }
     }
-  }, [reset]);
+  }, [reset, user]);
 
+  const onImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setProfileImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
-  const onSubmit = (data: PreferencesFormData) => {
-    console.log("Preferences saved:", data);
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setIsSavingProfile(true);
+
+    try {
+      let photoURL = user.photoURL;
+
+      if (profileImageFile) {
+        const storageRef = ref(storage, `profile-pictures/${user.uid}`);
+        await uploadBytes(storageRef, profileImageFile);
+        photoURL = await getDownloadURL(storageRef);
+      }
+
+      await updateProfile(auth.currentUser!, { displayName, photoURL });
+      await updateDoc(doc(db, "users", user.uid), { displayName, photoURL });
+
+      toast({ title: "Profile Updated", description: "Your profile information has been saved." });
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      toast({ title: "Update Failed", description: "Could not save your profile.", variant: "destructive" });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const onBudgetSubmit = (data: PreferencesFormData) => {
     localStorage.setItem("userPreferences", JSON.stringify(data));
     toast({
       title: "Preferences Saved",
       description: "Your budgeting preferences have been updated.",
     });
-    processFinancialEvent('budgetSaved'); // Pet interaction
+    processFinancialEvent('budgetSaved');
   };
 
   if (!isMounted) {
@@ -105,7 +154,45 @@ export function PreferencesSetup() {
   }
 
   return (
-    <div className="max-w-xl mx-auto p-4 md:p-6 animate-slide-in-up">
+    <div className="max-w-xl mx-auto p-4 md:p-6 space-y-8 animate-slide-in-up">
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl font-headline flex items-center">
+            <User className="mr-2 h-6 w-6 text-primary" />
+            Profile Settings
+          </CardTitle>
+          <CardDescription>
+            Update your public profile information.
+          </CardDescription>
+        </CardHeader>
+        <form onSubmit={handleProfileUpdate}>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="displayName">Display Name</Label>
+              <Input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Profile Picture</Label>
+              <div className="flex items-center gap-4">
+                {profileImagePreview ? (
+                  <Image src={profileImagePreview} alt="Profile preview" width={64} height={64} className="rounded-full object-cover" />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                )}
+                <Input id="profileImage" type="file" accept="image/png, image/jpeg" onChange={onImageFileChange} className="max-w-xs" />
+              </div>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button type="submit" disabled={isSavingProfile}>
+              {isSavingProfile ? <Loader2 className="animate-spin" /> : "Save Profile"}
+            </Button>
+          </CardFooter>
+        </form>
+      </Card>
+
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl font-headline flex items-center">
@@ -113,10 +200,10 @@ export function PreferencesSetup() {
             Budgeting Preferences
           </CardTitle>
           <CardDescription>
-            Set up your financial preferences to personalize your Ascendia Lite experience.
+            Set up your financial preferences to personalize your Ascendia experience.
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onBudgetSubmit)}>
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="monthlyIncome" className="flex items-center"><DollarSign className="mr-2 h-4 w-4 text-muted-foreground" />Monthly Income (XAF, Optional)</Label>
@@ -159,7 +246,6 @@ export function PreferencesSetup() {
                   />
                 ))}
               </div>
-               {errors.trackedCategories && <p className="text-sm text-destructive">{typeof errors.trackedCategories === 'string' ? errors.trackedCategories : 'Error in categories'}</p>}
             </div>
             
             <Controller
@@ -179,8 +265,8 @@ export function PreferencesSetup() {
 
           </CardContent>
           <CardFooter>
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Saving..." : "Save Preferences"}
+            <Button type="submit" className="w-full" disabled={isSubmittingPrefs}>
+              {isSubmittingPrefs ? "Saving..." : "Save Preferences"}
             </Button>
           </CardFooter>
         </form>

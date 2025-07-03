@@ -7,18 +7,34 @@ import { useEffect } from "react";
 import { SplashScreen } from "@/components/splash-screen";
 
 export default function DashboardPage() {
-    const { user, loading } = useAuth();
+    const { user, firestoreUser, loading } = useAuth();
     const router = useRouter();
 
     useEffect(() => {
-        if (!loading && !user) {
-            router.push('/login');
-        }
-    }, [user, loading, router]);
+        if (loading) return;
 
-    if (loading || !user) {
+        if (!user) {
+            router.push('/login');
+            return;
+        }
+
+        if (user && firestoreUser && !firestoreUser.hasCompletedOnboarding) {
+            router.push('/onboarding');
+            return;
+        }
+
+    }, [user, firestoreUser, loading, router]);
+
+    // Show splash screen while loading or if user data is not yet available for the onboarding check
+    if (loading || !user || !firestoreUser) {
         return <SplashScreen />;
     }
 
-    return <AppShell />;
+    // Only render AppShell if user is logged in and has completed onboarding
+    if (firestoreUser.hasCompletedOnboarding) {
+        return <AppShell />;
+    }
+
+    // This return is a fallback, useEffect should handle the redirect.
+    return <SplashScreen />;
 }

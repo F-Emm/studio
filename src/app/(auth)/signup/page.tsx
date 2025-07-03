@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { AppLogo } from '@/components/app-logo';
 import { Loader2 } from 'lucide-react';
+import type { FirestoreUser } from '@/types/firestore';
 
 const signupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters" }),
@@ -44,23 +45,23 @@ export default function SignupPage() {
 
       await updateProfile(user, { displayName: data.name });
       
-      // Create user document in Firestore
-      await setDoc(doc(db, "users", user.uid), {
+      const newUserDoc: FirestoreUser = {
         uid: user.uid,
         displayName: data.name,
         email: data.email,
-        photoURL: null, // Add photoURL field
+        photoURL: null,
         createdAt: new Date().toISOString(),
-        hasCompletedOnboarding: false, // For future onboarding flow
-      });
+        hasCompletedOnboarding: false,
+      };
+
+      await setDoc(doc(db, "users", user.uid), newUserDoc);
 
       toast({
         title: "Account Created",
-        description: "Welcome to Ascendia! You are now logged in.",
+        description: "Welcome to Ascendia! Let's get you set up.",
       });
 
-      // Redirect to dashboard (or onboarding in the future)
-      router.push('/dashboard');
+      router.push('/onboarding');
 
     } catch (error: any) {
       console.error("Signup failed:", error);

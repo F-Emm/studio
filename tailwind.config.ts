@@ -12,6 +12,7 @@ export default {
       fontFamily: {
         body: ['PT Sans', 'sans-serif'],
         headline: ['PT Sans', 'sans-serif'],
+        quote: ['Dancing Script', 'cursive'],
         code: ['monospace'],
       },
       colors: {

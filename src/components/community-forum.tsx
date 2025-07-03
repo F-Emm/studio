@@ -1,20 +1,26 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, Timestamp, doc, updateDoc, arrayUnion, arrayRemove, deleteDoc, getDocs } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject, type UploadTaskSnapshot } from 'firebase/storage';
+import { v4 as uuidv4 } from 'uuid';
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from '@/components/ui/input';
-import { ThumbsUp, MessageSquare, Send, UserCircle, Loader2, Image as ImageIcon } from "lucide-react";
+import { ThumbsUp, MessageSquare, Send, UserCircle, Loader2, Image as ImageIcon, Trash2 } from "lucide-react";
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
+import { Progress } from './ui/progress';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
 
+// --- Interfaces ---
 interface Post {
   id: string;
   authorId: string;
@@ -22,11 +28,115 @@ interface Post {
   authorAvatarUrl?: string | null;
   content: string;
   timestamp: Timestamp;
-  likes: number;
-  comments: number;
   imageUrl?: string | null;
+  imagePath?: string;
+  likedBy: string[];
 }
 
+interface Comment {
+    id: string;
+    authorId: string;
+    authorName: string;
+    authorAvatarUrl?: string | null;
+    content: string;
+    timestamp: Timestamp;
+}
+
+// --- Helper Functions ---
+const formatTimeAgo = (timestamp: Timestamp | null): string => {
+    if (!timestamp) return 'Just now';
+    const date = timestamp.toDate();
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + "y";
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + "mo";
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + "d";
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + "h";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + "m";
+    return Math.floor(seconds) + "s";
+  };
+
+
+// --- Comments Component ---
+function CommentsSheet({ post }: { post: Post }) {
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [comments, setComments] = useState<Comment[]>([]);
+    const [newComment, setNewComment] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        const commentsRef = collection(db, "posts", post.id, "comments");
+        const q = query(commentsRef, orderBy("timestamp", "asc"));
+        
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Comment)));
+        });
+
+        return () => unsubscribe();
+    }, [post.id]);
+
+    const handleAddComment = async () => {
+        if (!newComment.trim() || !user) return;
+        setIsSubmitting(true);
+        try {
+            await addDoc(collection(db, "posts", post.id, "comments"), {
+                authorId: user.uid,
+                authorName: user.displayName || "Anonymous",
+                authorAvatarUrl: user.photoURL || null,
+                content: newComment,
+                timestamp: serverTimestamp(),
+            });
+            setNewComment("");
+        } catch (error) {
+            toast({ title: "Error", description: "Could not add comment.", variant: "destructive" });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    
+    return (
+        <SheetContent className="flex flex-col">
+            <SheetHeader>
+                <SheetTitle>Comments on {post.authorName}'s post</SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto pr-6 space-y-4">
+                 {comments.length > 0 ? comments.map(comment => (
+                     <div key={comment.id} className="flex items-start space-x-3">
+                         <Avatar className="h-8 w-8">
+                             <AvatarImage src={comment.authorAvatarUrl || undefined} alt={comment.authorName} />
+                             <AvatarFallback>{comment.authorName.charAt(0)}</AvatarFallback>
+                         </Avatar>
+                         <div className="bg-muted p-3 rounded-lg flex-1">
+                             <div className="flex justify-between items-baseline">
+                                 <p className="font-semibold text-sm">{comment.authorName}</p>
+                                 <p className="text-xs text-muted-foreground">{formatTimeAgo(comment.timestamp)}</p>
+                             </div>
+                             <p className="text-sm">{comment.content}</p>
+                         </div>
+                     </div>
+                 )) : <p className="text-muted-foreground text-center py-8">No comments yet.</p>}
+            </div>
+            {user && (
+                 <div className="mt-auto p-4 border-t bg-background">
+                    <div className="flex gap-2">
+                        <Textarea value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Add a comment..." rows={2} />
+                        <Button onClick={handleAddComment} disabled={isSubmitting || !newComment.trim()}>
+                            {isSubmitting ? <Loader2 className="animate-spin" /> : <Send />}
+                        </Button>
+                    </div>
+                </div>
+            )}
+        </SheetContent>
+    );
+}
+
+
+// --- Main Forum Component ---
 export function CommunityForum() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -36,6 +146,8 @@ export function CommunityForum() {
   const [isMounted, setIsMounted] = useState(false);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setIsMounted(true);
@@ -48,6 +160,14 @@ export function CommunityForum() {
       });
       setPosts(postsData);
       setIsLoadingPosts(false);
+
+      // Fetch comment counts
+      postsData.forEach(async (post) => {
+        const commentsRef = collection(db, "posts", post.id, "comments");
+        const commentsSnapshot = await getDocs(commentsRef);
+        setCommentCounts(prev => ({...prev, [post.id]: commentsSnapshot.size }));
+      });
+
     }, (error) => {
       console.error("Error fetching posts: ", error);
       toast({ title: "Error", description: "Could not fetch community posts.", variant: "destructive" });
@@ -64,34 +184,48 @@ export function CommunityForum() {
   const handleCreatePost = async () => {
     if (!newPostContent.trim() || !user) return;
     setIsSubmitting(true);
+    setUploadProgress(null);
 
     try {
-      // 1. Create the post document first to get an ID
-      const postDocRef = await addDoc(collection(db, "posts"), {
-        authorId: user.uid,
-        authorName: user.displayName || "Anonymous",
-        authorAvatarUrl: user.photoURL || null,
-        content: newPostContent,
-        timestamp: serverTimestamp(),
-        likes: 0,
-        comments: 0,
-        imageUrl: null,
-      });
+        let downloadURL: string | null = null;
+        let imagePath: string | null = null;
 
-      // 2. If there's an image, upload it
-      let downloadURL: string | null = null;
-      if (postImageFile) {
-        const imageRef = ref(storage, `posts/${postDocRef.id}/image`);
-        await uploadBytes(imageRef, postImageFile);
-        downloadURL = await getDownloadURL(imageRef);
+        if (postImageFile) {
+            imagePath = `posts/${user.uid}/${uuidv4()}`;
+            const storageRef = ref(storage, imagePath);
+            const uploadTask = uploadBytesResumable(storageRef, postImageFile);
+            
+            await new Promise<void>((resolve, reject) => {
+                uploadTask.on('state_changed', 
+                    (snapshot: UploadTaskSnapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        setUploadProgress(progress);
+                    },
+                    (error) => {
+                        console.error("Upload failed", error);
+                        reject(error);
+                    },
+                    async () => {
+                        downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                        resolve();
+                    }
+                );
+            });
+        }
         
-        // 3. Update the post document with the image URL
-        await updateDoc(postDocRef, { imageUrl: downloadURL });
-      }
+        await addDoc(collection(db, "posts"), {
+            authorId: user.uid,
+            authorName: user.displayName || "Anonymous",
+            authorAvatarUrl: user.photoURL || null,
+            content: newPostContent,
+            timestamp: serverTimestamp(),
+            likedBy: [],
+            imageUrl: downloadURL,
+            imagePath: imagePath
+        });
 
       setNewPostContent('');
       setPostImageFile(null);
-      // This is a workaround to make the input file reset
       const fileInput = document.getElementById('post-image') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
 
@@ -101,26 +235,38 @@ export function CommunityForum() {
       toast({ title: "Error", description: `Could not create your post. ${error.message}`, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
+      setUploadProgress(null);
     }
   };
-  
-  const formatTimeAgo = (timestamp: Timestamp | null): string => {
-    if (!timestamp) return 'Just now';
-    const date = timestamp.toDate();
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-    let interval = seconds / 31536000;
-    if (interval > 1) return Math.floor(interval) + " years ago";
-    interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + " months ago";
-    interval = seconds / 86400;
-    if (interval > 1) return Math.floor(interval) + " days ago";
-    interval = seconds / 3600;
-    if (interval > 1) return Math.floor(interval) + " hours ago";
-    interval = seconds / 60;
-    if (interval > 1) return Math.floor(interval) + " minutes ago";
-    return Math.floor(seconds) + " seconds ago";
+
+  const handleLikePost = async (postId: string) => {
+    if (!user) return;
+    const postRef = doc(db, "posts", postId);
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    if (post.likedBy.includes(user.uid)) {
+        await updateDoc(postRef, { likedBy: arrayRemove(user.uid) });
+    } else {
+        await updateDoc(postRef, { likedBy: arrayUnion(user.uid) });
+    }
   };
 
+  const handleDeletePost = async (post: Post) => {
+    if (!user || user.uid !== post.authorId) return;
+    try {
+        if (post.imagePath) {
+            const imageRef = ref(storage, post.imagePath);
+            await deleteObject(imageRef);
+        }
+        await deleteDoc(doc(db, "posts", post.id));
+        toast({ title: "Post Deleted", description: "Your post has been removed."});
+    } catch (error) {
+        console.error("Error deleting post: ", error);
+        toast({ title: "Error", description: "Could not delete post.", variant: "destructive"});
+    }
+  }
+  
   if (!isMounted) {
     return (
       <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6 animate-pulse">
@@ -156,11 +302,14 @@ export function CommunityForum() {
                 className="text-sm"
               />
           </div>
+          {uploadProgress !== null && (
+              <Progress value={uploadProgress} className="h-2" />
+          )}
         </CardContent>
         <CardFooter className="flex justify-end">
           <Button onClick={handleCreatePost} disabled={!newPostContent.trim() || isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-            {isSubmitting ? 'Posting...' : 'Post'}
+            {isSubmitting ? (uploadProgress !== null ? `Uploading... ${Math.round(uploadProgress)}%` : 'Posting...') : 'Post'}
           </Button>
         </CardFooter>
       </Card>
@@ -179,17 +328,40 @@ export function CommunityForum() {
           posts.map((post) => (
             <Card key={post.id} className="shadow-md hover:shadow-lg transition-shadow duration-300">
               <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <Avatar>
-                    <AvatarImage src={post.authorAvatarUrl || undefined} alt={post.authorName} data-ai-hint="profile person" />
-                    <AvatarFallback>
-                      {post.authorName.split(' ').map(n => n[0]).join('') || <UserCircle />}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-semibold text-sm">{post.authorName}</p>
-                    <p className="text-xs text-muted-foreground">{formatTimeAgo(post.timestamp)}</p>
-                  </div>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                        <Avatar>
+                            <AvatarImage src={post.authorAvatarUrl || undefined} alt={post.authorName} data-ai-hint="profile person" />
+                            <AvatarFallback>
+                            {post.authorName.split(' ').map(n => n[0]).join('') || <UserCircle />}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div>
+                            <p className="font-semibold text-sm">{post.authorName}</p>
+                            <p className="text-xs text-muted-foreground">{formatTimeAgo(post.timestamp)}</p>
+                        </div>
+                    </div>
+                    {user?.uid === post.authorId && (
+                       <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This action cannot be undone. This will permanently delete your post and its associated image.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => handleDeletePost(post)}>Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                       </AlertDialog>
+                    )}
                 </div>
               </CardHeader>
               <CardContent>
@@ -200,13 +372,18 @@ export function CommunityForum() {
                   </div>
                 )}
               </CardContent>
-              <CardFooter className="flex justify-between items-center text-sm text-muted-foreground pt-4 border-t">
-                <Button variant="ghost" size="sm" className="flex items-center gap-1.5">
-                  <ThumbsUp className="h-4 w-4" /> {post.likes} Likes
+              <CardFooter className="flex justify-start items-center gap-4 text-sm text-muted-foreground pt-4 border-t">
+                <Button variant="ghost" size="sm" className="flex items-center gap-1.5" onClick={() => handleLikePost(post.id)}>
+                  <ThumbsUp className={`h-4 w-4 ${post.likedBy.includes(user?.uid || '') ? 'text-primary fill-primary' : ''}`} /> {post.likedBy.length}
                 </Button>
-                <Button variant="ghost" size="sm" className="flex items-center gap-1.5">
-                  <MessageSquare className="h-4 w-4" /> {post.comments} Comments
-                </Button>
+                <Sheet>
+                    <SheetTrigger asChild>
+                        <Button variant="ghost" size="sm" className="flex items-center gap-1.5">
+                            <MessageSquare className="h-4 w-4" /> {commentCounts[post.id] || 0}
+                        </Button>
+                    </SheetTrigger>
+                    <CommentsSheet post={post} />
+                </Sheet>
               </CardFooter>
             </Card>
           ))

@@ -15,10 +15,12 @@ import { Settings, DollarSign, Target, ListChecks, User, Image as ImageIcon, Loa
 import { usePet } from '@/contexts/pet-context';
 import { useAuth } from '@/contexts/auth-context';
 import { doc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, type UploadTaskSnapshot } from 'firebase/storage';
 import { updateProfile } from 'firebase/auth';
 import { db, storage, auth } from '@/lib/firebase';
 import Image from 'next/image';
+import { v4 as uuidv4 } from 'uuid';
+import { Progress } from '@/components/ui/progress';
 
 const preferencesSchema = z.object({
   monthlyIncome: z.preprocess(
@@ -53,12 +55,13 @@ export function PreferencesSetup() {
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
   const { processFinancialEvent } = usePet();
-  const { user } = useAuth();
+  const { user, firestoreUser } = useAuth();
   
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const { control, handleSubmit, reset, formState: { errors, isSubmitting: isSubmittingPrefs } } = useForm<PreferencesFormData>({
     resolver: zodResolver(preferencesSchema),
@@ -78,9 +81,9 @@ export function PreferencesSetup() {
 
   useEffect(() => {
     setIsMounted(true);
-    if (user) {
-      setDisplayName(user.displayName || '');
-      setProfileImagePreview(user.photoURL);
+    if (firestoreUser) {
+      setDisplayName(firestoreUser.displayName || '');
+      setProfileImagePreview(firestoreUser.photoURL);
     }
     const savedPrefs = localStorage.getItem("userPreferences");
     if (savedPrefs) {
@@ -94,7 +97,7 @@ export function PreferencesSetup() {
         console.error("Error parsing preferences from localStorage", error);
       }
     }
-  }, [reset, user]);
+  }, [reset, firestoreUser]);
 
   const onImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -112,25 +115,52 @@ export function PreferencesSetup() {
     e.preventDefault();
     if (!user || !auth.currentUser) return;
     setIsSavingProfile(true);
+    setUploadProgress(null);
 
     try {
-      let photoURL = user.photoURL;
+      let photoURL = firestoreUser?.photoURL || null;
 
       if (profileImageFile) {
-        const storageRef = ref(storage, `users/${user.uid}/profilePicture`);
-        await uploadBytes(storageRef, profileImageFile);
-        photoURL = await getDownloadURL(storageRef);
+        const fileExtension = profileImageFile.name.split('.').pop();
+        const imagePath = `users/${user.uid}/profilePicture/${uuidv4()}.${fileExtension}`;
+        const storageRef = ref(storage, imagePath);
+        const uploadTask = uploadBytesResumable(storageRef, profileImageFile);
+
+        await new Promise<void>((resolve, reject) => {
+            uploadTask.on('state_changed',
+                (snapshot: UploadTaskSnapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    setUploadProgress(progress);
+                },
+                (error) => {
+                    console.error("Upload failed:", error);
+                    reject(error);
+                },
+                async () => {
+                    photoURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    resolve();
+                }
+            );
+        });
       }
 
-      await updateProfile(auth.currentUser, { displayName: displayName || 'Anonymous', photoURL });
-      await updateDoc(doc(db, "users", user.uid), { displayName, photoURL });
-
+      const updatedData: { displayName: string, photoURL?: string | null } = { displayName: displayName || 'Anonymous' };
+      if (photoURL !== firestoreUser?.photoURL) {
+        updatedData.photoURL = photoURL;
+      }
+      
+      await updateProfile(auth.currentUser, updatedData);
+      await updateDoc(doc(db, "users", user.uid), updatedData);
+      
       toast({ title: "Profile Updated", description: "Your profile information has been saved." });
+      setProfileImageFile(null);
+
     } catch (error: any) {
       console.error("Error updating profile:", error);
       toast({ title: "Update Failed", description: `Could not save your profile. ${error.message}`, variant: "destructive" });
     } finally {
       setIsSavingProfile(false);
+      setUploadProgress(null);
     }
   };
 
@@ -184,6 +214,12 @@ export function PreferencesSetup() {
                 <Input id="profileImage" type="file" accept="image/png, image/jpeg" onChange={onImageFileChange} className="max-w-xs" />
               </div>
             </div>
+             {uploadProgress !== null && (
+                <div className="space-y-1">
+                    <Label>Upload Progress</Label>
+                    <Progress value={uploadProgress} className="h-2" />
+                </div>
+            )}
           </CardContent>
           <CardFooter>
             <Button type="submit" disabled={isSavingProfile}>

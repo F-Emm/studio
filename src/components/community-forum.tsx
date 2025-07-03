@@ -151,6 +151,13 @@ export function CommunityForum() {
 
   useEffect(() => {
     setIsMounted(true);
+
+    if (!user) {
+        setPosts([]);
+        setIsLoadingPosts(false);
+        return;
+    }
+    
     const q = query(collection(db, "posts"), orderBy("timestamp", "desc"));
     
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -160,7 +167,7 @@ export function CommunityForum() {
         postsData.push({
           id: doc.id,
           ...data,
-          likedBy: data.likedBy || [], // FIX: Ensure likedBy is always an array
+          likedBy: data.likedBy || [],
         } as Post);
       });
       setPosts(postsData);
@@ -180,7 +187,7 @@ export function CommunityForum() {
     });
 
     return () => unsubscribe();
-  }, [toast]);
+  }, [toast, user]);
 
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPostImageFile(e.target.files?.[0] || null);

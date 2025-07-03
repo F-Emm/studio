@@ -118,14 +118,14 @@ export function PreferencesSetup() {
     setUploadProgress(null);
 
     try {
-      const updates: { displayName: string; photoURL?: string } = {
-        displayName: displayName.trim() || user.displayName || 'Anonymous',
-      };
+      const updates: { displayName?: string; photoURL?: string } = {};
+      
+      if (displayName.trim() && displayName.trim() !== firestoreUser?.displayName) {
+          updates.displayName = displayName.trim();
+      }
 
-      // Only proceed with upload if a file was selected
       if (profileImageFile) {
-        const fileExtension = profileImageFile.name.split('.').pop();
-        const imagePath = `users/${user.uid}/profilePicture/${uuidv4()}.${fileExtension}`;
+        const imagePath = `users/${user.uid}/profilePicture/${uuidv4()}`;
         const storageRef = ref(storage, imagePath);
         const uploadTask = uploadBytesResumable(storageRef, profileImageFile);
 
@@ -138,19 +138,19 @@ export function PreferencesSetup() {
             },
             (error) => reject(error),
             async () => {
-              const url = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(url);
+                try {
+                    const url = await getDownloadURL(uploadTask.snapshot.ref);
+                    resolve(url);
+                } catch(error) {
+                    reject(error);
+                }
             }
           );
         });
         updates.photoURL = downloadURL;
       }
 
-      // Check if anything actually changed
-      const hasNameChanged = updates.displayName !== (firestoreUser?.displayName || '');
-      const hasPhotoChanged = 'photoURL' in updates && updates.photoURL !== (firestoreUser?.photoURL || '');
-
-      if (hasNameChanged || hasPhotoChanged) {
+      if (Object.keys(updates).length > 0) {
         await updateProfile(auth.currentUser, updates);
         await updateDoc(doc(db, "users", user.uid), updates);
         toast({ title: "Profile Updated", description: "Your profile information has been saved." });
@@ -164,7 +164,7 @@ export function PreferencesSetup() {
       console.error("Error updating profile:", error);
       let errorMessage = "Could not save your profile. Please try again.";
       if (error.code === 'storage/unauthorized') {
-        errorMessage = "Image upload failed due to permissions. Please check your Firebase Storage security rules.";
+        errorMessage = "Image upload failed. Please check your Firebase Storage security rules in the Firebase Console.";
       }
       toast({ title: "Update Failed", description: errorMessage, variant: "destructive" });
     } finally {
@@ -209,7 +209,7 @@ export function PreferencesSetup() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="displayName">Display Name</Label>
-              <Input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+              <Input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required disabled={!user} />
             </div>
             <div className="space-y-2">
               <Label>Profile Picture</Label>
@@ -221,7 +221,7 @@ export function PreferencesSetup() {
                     <ImageIcon className="h-8 w-8 text-muted-foreground" />
                   </div>
                 )}
-                <Input id="profileImage" type="file" accept="image/png, image/jpeg" onChange={onImageFileChange} className="max-w-xs" />
+                <Input id="profileImage" type="file" accept="image/png, image/jpeg" onChange={onImageFileChange} className="max-w-xs" disabled={!user} />
               </div>
             </div>
              {uploadProgress !== null && (
@@ -232,7 +232,7 @@ export function PreferencesSetup() {
             )}
           </CardContent>
           <CardFooter>
-            <Button type="submit" disabled={isSavingProfile}>
+            <Button type="submit" disabled={!user || isSavingProfile}>
               {isSavingProfile ? <Loader2 className="animate-spin" /> : "Save Profile"}
             </Button>
           </CardFooter>

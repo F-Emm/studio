@@ -134,7 +134,7 @@ function CommentsSheet({ post }: { post: Post }) {
                  <div className="mt-auto p-4 border-t bg-background">
                     <div className="flex gap-2">
                         <Textarea value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Add a comment..." rows={2} />
-                        <Button onClick={handleAddComment} disabled={isSubmitting || !newComment.trim()}>
+                        <Button onClick={handleAddComment} disabled={!user || isSubmitting || !newComment.trim()}>
                             {isSubmitting ? <Loader2 className="animate-spin" /> : <Send />}
                         </Button>
                     </div>
@@ -227,45 +227,49 @@ export function CommunityForum() {
     setIsSubmitting(true);
     setUploadProgress(null);
 
+    const postDocRef = doc(collection(db, "posts"));
+
     try {
-        const postDocRef = doc(collection(db, "posts")); // Get a ref with a unique ID first
-        let downloadURL: string | null = null;
-        let imagePathValue: string | null = null;
-        
-        // Step 1: Upload image if it exists
-        if (postImageFile) {
-            const imageId = uuidv4();
-            imagePathValue = `posts/${postDocRef.id}/${imageId}`; // Use the post ID in the path
-            const storageRef = ref(storage, imagePathValue);
-            const uploadTask = uploadBytesResumable(storageRef, postImageFile);
-            
-            downloadURL = await new Promise<string>((resolve, reject) => {
-                uploadTask.on('state_changed', 
-                    (snapshot: UploadTaskSnapshot) => {
-                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                        setUploadProgress(progress);
-                    },
-                    (error) => reject(error),
-                    async () => {
-                        const url = await getDownloadURL(uploadTask.snapshot.ref);
-                        resolve(url);
-                    }
-                );
-            });
-        }
-        
-        // Step 2: Create the post document with all data
-        await setDoc(postDocRef, {
-            authorId: user.uid,
-            authorName: user.displayName || "Anonymous",
-            authorAvatarUrl: user.photoURL || null,
-            content: newPostContent,
-            timestamp: serverTimestamp(),
-            likedBy: [],
-            imageUrl: downloadURL,
-            imagePath: imagePathValue,
+      let downloadURL: string | null = null;
+      let imagePathValue: string | null = null;
+      
+      if (postImageFile) {
+        imagePathValue = `posts/${postDocRef.id}/${uuidv4()}`;
+        const storageRef = ref(storage, imagePathValue);
+        const uploadTask = uploadBytesResumable(storageRef, postImageFile);
+
+        downloadURL = await new Promise<string>((resolve, reject) => {
+          uploadTask.on('state_changed', 
+            (snapshot: UploadTaskSnapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
+            },
+            (error) => {
+              reject(error);
+            },
+            async () => {
+              try {
+                const url = await getDownloadURL(uploadTask.snapshot.ref);
+                resolve(url);
+              } catch (error) {
+                reject(error);
+              }
+            }
+          );
         });
-        
+      }
+      
+      await setDoc(postDocRef, {
+        authorId: user.uid,
+        authorName: user.displayName || "Anonymous",
+        authorAvatarUrl: user.photoURL || null,
+        content: newPostContent,
+        timestamp: serverTimestamp(),
+        likedBy: [],
+        imageUrl: downloadURL,
+        imagePath: imagePathValue,
+      });
+      
       setNewPostContent('');
       setPostImageFile(null);
       const fileInput = document.getElementById('post-image') as HTMLInputElement;
@@ -276,7 +280,7 @@ export function CommunityForum() {
       console.error("Error creating post:", error);
       let errorMessage = "Could not create your post. Please try again.";
       if (error.code === 'storage/unauthorized') {
-          errorMessage = "Image upload failed due to permissions. Please check your Firebase Storage security rules.";
+        errorMessage = "Image upload failed. Please check your Firebase Storage security rules in the Firebase Console.";
       }
       toast({ title: "Error Creating Post", description: errorMessage, variant: "destructive" });
     } finally {
@@ -338,6 +342,7 @@ export function CommunityForum() {
             placeholder="Share your thoughts, ask questions, or offer advice..."
             rows={4}
             className="resize-none"
+            disabled={!user}
           />
           <div className="flex items-center gap-2">
             <ImageIcon className="h-5 w-5 text-muted-foreground" />
@@ -347,6 +352,7 @@ export function CommunityForum() {
                 accept="image/png, image/jpeg"
                 onChange={handleImageFileChange}
                 className="text-sm"
+                disabled={!user}
               />
           </div>
           {uploadProgress !== null && (
@@ -354,7 +360,7 @@ export function CommunityForum() {
           )}
         </CardContent>
         <CardFooter className="flex justify-end">
-          <Button onClick={handleCreatePost} disabled={!newPostContent.trim() || isSubmitting}>
+          <Button onClick={handleCreatePost} disabled={!user || !newPostContent.trim() || isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
             {isSubmitting ? (uploadProgress !== null ? `Uploading... ${Math.round(uploadProgress)}%` : 'Posting...') : 'Post'}
           </Button>
@@ -420,12 +426,12 @@ export function CommunityForum() {
                 )}
               </CardContent>
               <CardFooter className="flex justify-start items-center gap-4 text-sm text-muted-foreground pt-4 border-t">
-                <Button variant="ghost" size="sm" className="flex items-center gap-1.5" onClick={() => handleLikePost(post.id)}>
+                <Button variant="ghost" size="sm" className="flex items-center gap-1.5" onClick={() => handleLikePost(post.id)} disabled={!user}>
                   <ThumbsUp className={`h-4 w-4 ${post.likedBy.includes(user?.uid || '') ? 'text-primary fill-primary' : ''}`} /> {post.likedBy.length}
                 </Button>
                 <Sheet>
                     <SheetTrigger asChild>
-                        <Button variant="ghost" size="sm" className="flex items-center gap-1.5">
+                        <Button variant="ghost" size="sm" className="flex items-center gap-1.5" disabled={!user}>
                             <MessageSquare className="h-4 w-4" /> {commentCounts[post.id] || 0}
                         </Button>
                     </SheetTrigger>

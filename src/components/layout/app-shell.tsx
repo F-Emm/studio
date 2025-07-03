@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Landmark, WalletCards, Newspaper, UsersRound, Settings2, ShieldAlert, Target, Banknote, PawPrint } from 'lucide-react';
+import { Landmark, WalletCards, Newspaper, UsersRound, Settings2, ShieldAlert, Target, Banknote, PawPrint, LogOut } from 'lucide-react';
 import { DebtOverview, type Debt } from '@/components/debt-overview';
 import { ExpenseTracking } from '@/components/expense-tracking';
 import { ArticleSummarization } from '@/components/article-summarization';
@@ -28,6 +28,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { addDays, format, isWithinInterval, parseISO } from 'date-fns';
+import { useAuth } from '@/contexts/auth-context';
+import { auth } from '@/lib/firebase';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
 
 const features = [
   { id: "debt", label: "Debt Overview", icon: Landmark, component: <DebtOverview /> },
@@ -40,12 +44,26 @@ const features = [
   { id: "preferences", label: "Preferences", icon: Settings2, component: <PreferencesSetup /> },
 ];
 
-const WELCOME_STORAGE_KEY = 'ascendiaWelcomeShown_v2'; // Key updated due to app name change
+const WELCOME_STORAGE_KEY = 'ascendiaWelcomeShown_v2';
 
 export function AppShell() {
   const [activeTab, setActiveTab] = useState(features[0].id);
   const [isMounted, setIsMounted] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const { user } = useAuth();
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    try {
+      await auth.signOut();
+      toast({ title: "Signed Out", description: "You have been successfully signed out." });
+      router.push('/login');
+    } catch (error) {
+      toast({ variant: 'destructive', title: "Sign Out Failed", description: "Could not sign out. Please try again." });
+    }
+  };
+
 
   useEffect(() => {
     setIsMounted(true);
@@ -54,7 +72,7 @@ export function AppShell() {
       setShowWelcome(true);
     }
     
-    const lastTab = localStorage.getItem('ascendiaActiveTab_v2'); // Key updated
+    const lastTab = localStorage.getItem('ascendiaActiveTab_v2');
     if (lastTab && features.some(f => f.id === lastTab)) {
       setActiveTab(lastTab);
     }
@@ -130,7 +148,7 @@ export function AppShell() {
 
   useEffect(() => {
     if (isMounted) {
-      localStorage.setItem('ascendiaActiveTab_v2', activeTab); // Key updated
+      localStorage.setItem('ascendiaActiveTab_v2', activeTab);
     }
   }, [activeTab, isMounted]);
 
@@ -148,7 +166,6 @@ export function AppShell() {
 
 
   if (!isMounted) {
-    // Basic skeleton loader for the shell
     return (
       <div className="flex flex-col min-h-screen animate-pulse">
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -199,6 +216,9 @@ export function AppShell() {
                   </AlertDialogContent>
               </AlertDialog>
               <ThemeToggle />
+              <Button onClick={handleSignOut} variant="ghost" size="icon" aria-label="Sign Out">
+                <LogOut className="h-5 w-5" />
+              </Button>
             </div>
           </div>
         </header>

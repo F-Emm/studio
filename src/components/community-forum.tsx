@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,7 @@ export function CommunityForum() {
     setIsSubmitting(true);
 
     try {
+      // 1. Create the post document first to get an ID
       const postDocRef = await addDoc(collection(db, "posts"), {
         authorId: user.uid,
         authorName: user.displayName || "Anonymous",
@@ -77,19 +78,27 @@ export function CommunityForum() {
         imageUrl: null,
       });
 
+      // 2. If there's an image, upload it
+      let downloadURL: string | null = null;
       if (postImageFile) {
-        const imageRef = ref(storage, `post-images/${postDocRef.id}`);
+        const imageRef = ref(storage, `posts/${postDocRef.id}/image`);
         await uploadBytes(imageRef, postImageFile);
-        const downloadURL = await getDownloadURL(imageRef);
-        await addDoc(collection(db, "posts"), { ...postDocRef, imageUrl: downloadURL }); // This is wrong, should update
+        downloadURL = await getDownloadURL(imageRef);
+        
+        // 3. Update the post document with the image URL
+        await updateDoc(postDocRef, { imageUrl: downloadURL });
       }
 
       setNewPostContent('');
       setPostImageFile(null);
+      // This is a workaround to make the input file reset
+      const fileInput = document.getElementById('post-image') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+
       toast({ title: "Post Created", description: "Your post is now live." });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating post:", error);
-      toast({ title: "Error", description: "Could not create your post.", variant: "destructive" });
+      toast({ title: "Error", description: `Could not create your post. ${error.message}`, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }

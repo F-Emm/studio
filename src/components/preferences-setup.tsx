@@ -110,25 +110,25 @@ export function PreferencesSetup() {
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !auth.currentUser) return;
     setIsSavingProfile(true);
 
     try {
       let photoURL = user.photoURL;
 
       if (profileImageFile) {
-        const storageRef = ref(storage, `profile-pictures/${user.uid}`);
+        const storageRef = ref(storage, `users/${user.uid}/profilePicture`);
         await uploadBytes(storageRef, profileImageFile);
         photoURL = await getDownloadURL(storageRef);
       }
 
-      await updateProfile(auth.currentUser!, { displayName, photoURL });
+      await updateProfile(auth.currentUser, { displayName: displayName || 'Anonymous', photoURL });
       await updateDoc(doc(db, "users", user.uid), { displayName, photoURL });
 
       toast({ title: "Profile Updated", description: "Your profile information has been saved." });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating profile:", error);
-      toast({ title: "Update Failed", description: "Could not save your profile.", variant: "destructive" });
+      toast({ title: "Update Failed", description: `Could not save your profile. ${error.message}`, variant: "destructive" });
     } finally {
       setIsSavingProfile(false);
     }

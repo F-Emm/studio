@@ -163,7 +163,13 @@ export function PreferencesSetup() {
 
     } catch (error: any) {
         console.error("Error updating profile:", error);
-        toast({ title: "Update Failed", description: `Could not save your profile. ${error.message}`, variant: "destructive" });
+        let errorMessage = "Could not save your profile. Please try again.";
+        if (error.code === 'storage/unauthorized') {
+            errorMessage = "Image upload failed due to permissions. Please check your Firebase Storage security rules.";
+        } else if (error.message) {
+            errorMessage = `Could not save your profile. ${error.message}`;
+        }
+        toast({ title: "Update Failed", description: errorMessage, variant: "destructive" });
     } finally {
         setIsSavingProfile(false);
         setUploadProgress(null);

@@ -275,7 +275,13 @@ export function CommunityForum() {
       toast({ title: "Post Created", description: "Your post is now live." });
     } catch (error: any) {
       console.error("Error creating post:", error);
-      toast({ title: "Error", description: `Could not create your post. ${error.message}`, variant: "destructive" });
+      let errorMessage = "Could not create your post. Please try again.";
+      if (error.code === 'storage/unauthorized') {
+          errorMessage = "Image upload failed due to permissions. Please check your Firebase Storage security rules.";
+      } else if (error.message) {
+          errorMessage = `Could not create your post. ${error.message}`;
+      }
+      toast({ title: "Error Creating Post", description: errorMessage, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
       setUploadProgress(null);

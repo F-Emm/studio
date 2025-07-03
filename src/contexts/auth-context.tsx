@@ -41,6 +41,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setFirestoreUser(null);
           }
           setLoading(false);
+        },
+        (error) => {
+          console.error("Error listening to user document:", error);
+          setFirestoreUser(null);
+          setLoading(false);
         });
         return () => unsubFirestore();
       } else {

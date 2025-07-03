@@ -188,10 +188,20 @@ export function CommunityForum() {
         commentCountPromises.push(promise);
       });
       
-      Promise.all(commentCountPromises).then(() => {
-        setPosts(postsData);
-        setIsLoadingPosts(false);
-      });
+      Promise.all(commentCountPromises)
+        .then(() => {
+          setPosts(postsData);
+          setIsLoadingPosts(false);
+        })
+        .catch(error => {
+            if (error.code !== 'permission-denied') {
+                console.error("Error fetching comment counts:", error);
+                toast({ title: "Error", description: "Could not load comment counts.", variant: "destructive" });
+            }
+            // Even if comment counts fail (e.g. on logout), we should still show the posts.
+            setPosts(postsData);
+            setIsLoadingPosts(false);
+        });
 
     }, (error) => {
       console.error("Error fetching posts: ", error);

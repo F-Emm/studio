@@ -280,7 +280,7 @@ export function CommunityForum() {
       console.error("Error creating post:", error);
       let errorMessage = "Could not create your post. Please try again.";
       if (error.code === 'storage/unauthorized') {
-        errorMessage = "Image upload failed due to a permissions error. Please go to your Firebase Console, navigate to Storage > Rules, and ensure your rules allow writes to the 'posts' path for authenticated users.";
+        errorMessage = "Image upload failed. This is a permissions error. Please check your Firebase Storage rules in your Firebase Console and ensure your `.env.local` configuration is correct.";
       }
       toast({ title: "Error Creating Post", description: errorMessage, variant: "destructive", duration: 9000 });
     } finally {

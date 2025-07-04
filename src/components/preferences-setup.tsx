@@ -136,7 +136,7 @@ export function PreferencesSetup() {
               // A full list of error codes is available at
               // https://firebase.google.com/docs/storage/web/handle-errors
               if (error.code === 'storage/unauthorized') {
-                 reject(new Error("Permission denied. Please check your Firebase Storage rules."));
+                 reject(new Error("Permission denied. Please check your Firebase Storage rules and `.env.local` file."));
               } else {
                  reject(error);
               }
@@ -160,6 +160,7 @@ export function PreferencesSetup() {
       if (!hasNameChanged && !hasPhotoChanged) {
         toast({ title: "No Changes", description: "Your profile information is up to date." });
         setIsSavingProfile(false);
+        setUploadProgress(null);
         return;
       }
 

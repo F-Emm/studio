@@ -5,9 +5,10 @@ import type { User } from 'firebase/auth';
 import { createContext, useState, useEffect, useContext, type ReactNode } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { auth, db, isFirebaseConfigured } from '@/lib/firebase';
 import { SplashScreen } from '@/components/splash-screen';
 import type { FirestoreUser } from '@/types/firestore';
+import { FirebaseConfigErrorScreen } from '@/components/firebase-config-error';
 
 interface AuthContextType {
   user: User | null;
@@ -27,16 +28,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // If firebase is not configured, don't attempt to connect.
+    if (!isFirebaseConfigured || !auth) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
-      if (user) {
+      if (user && db) {
         // User is logged in, listen for their Firestore document
         const userDocRef = doc(db, 'users', user.uid);
         const unsubFirestore = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
             setFirestoreUser(doc.data() as FirestoreUser);
           } else {
-            // This case might happen if the Firestore doc creation fails after signup
             console.error("Firestore user document not found!");
             setFirestoreUser(null);
           }
@@ -57,6 +63,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return () => unsubscribe();
   }, []);
+
+  // Render an actionable error screen if Firebase is not configured.
+  // This prevents the rest of the app from rendering and crashing.
+  if (!isFirebaseConfigured) {
+    return <FirebaseConfigErrorScreen />;
+  }
 
   return (
     <AuthContext.Provider value={{ user, firestoreUser, loading }}>

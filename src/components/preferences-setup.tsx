@@ -55,7 +55,7 @@ export function PreferencesSetup() {
   const { toast } = useToast();
   const [isMounted, setIsMounted] = useState(false);
   const { processFinancialEvent } = usePet();
-  const { user, firestoreUser } = useAuth();
+  const { user, firestoreUser, loading: authLoading } = useAuth();
   
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [displayName, setDisplayName] = useState('');
@@ -113,30 +113,34 @@ export function PreferencesSetup() {
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !auth.currentUser) return;
+    if (!user || !auth.currentUser || !firestoreUser) return;
     setIsSavingProfile(true);
     setUploadProgress(null);
 
     try {
-      const updates: { displayName?: string; photoURL?: string } = {};
-      
-      if (displayName.trim() && displayName.trim() !== firestoreUser?.displayName) {
-          updates.displayName = displayName.trim();
-      }
+      let photoURL = firestoreUser.photoURL;
 
       if (profileImageFile) {
         const imagePath = `users/${user.uid}/profilePicture/${uuidv4()}`;
         const storageRef = ref(storage, imagePath);
         const uploadTask = uploadBytesResumable(storageRef, profileImageFile);
 
-        const downloadURL = await new Promise<string>((resolve, reject) => {
+        photoURL = await new Promise<string | null>((resolve, reject) => {
           uploadTask.on(
             'state_changed',
             (snapshot: UploadTaskSnapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
               setUploadProgress(progress);
             },
-            (error) => reject(error),
+            (error) => {
+              // A full list of error codes is available at
+              // https://firebase.google.com/docs/storage/web/handle-errors
+              if (error.code === 'storage/unauthorized') {
+                 reject(new Error("Permission denied. Please check your Firebase Storage rules."));
+              } else {
+                 reject(error);
+              }
+            },
             async () => {
                 try {
                     const url = await getDownloadURL(uploadTask.snapshot.ref);
@@ -147,32 +151,39 @@ export function PreferencesSetup() {
             }
           );
         });
-        updates.photoURL = downloadURL;
       }
 
-      if (Object.keys(updates).length > 0) {
+      const newDisplayName = displayName.trim();
+      const hasNameChanged = newDisplayName && newDisplayName !== firestoreUser.displayName;
+      const hasPhotoChanged = photoURL !== firestoreUser.photoURL;
+      
+      if (!hasNameChanged && !hasPhotoChanged) {
+        toast({ title: "No Changes", description: "Your profile information is up to date." });
+        setIsSavingProfile(false);
+        return;
+      }
+
+      const updates: { displayName?: string; photoURL?: string | null } = {};
+      if (hasNameChanged) updates.displayName = newDisplayName;
+      if (hasPhotoChanged) updates.photoURL = photoURL;
+
+      if (auth.currentUser && Object.keys(updates).length > 0) {
         await updateProfile(auth.currentUser, updates);
         await updateDoc(doc(db, "users", user.uid), updates);
-        toast({ title: "Profile Updated", description: "Your profile information has been saved." });
-      } else {
-        toast({ title: "No Changes", description: "Your profile information is up to date." });
       }
       
+      toast({ title: "Profile Updated", description: "Your profile information has been saved." });
       setProfileImageFile(null);
 
     } catch (error: any) {
       console.error("Error updating profile:", error);
-      let errorMessage = "Could not save your profile. Please try again.";
-      if (error.code === 'storage/unauthorized') {
-        errorMessage = "Image upload failed. Please check your Firebase Storage security rules in the Firebase Console.";
-      }
-      toast({ title: "Update Failed", description: errorMessage, variant: "destructive" });
+      let errorMessage = error.message || "Could not save your profile. Please try again.";
+      toast({ title: "Update Failed", description: errorMessage, variant: "destructive", duration: 9000 });
     } finally {
       setIsSavingProfile(false);
       setUploadProgress(null);
     }
   };
-
 
   const onBudgetSubmit = (data: PreferencesFormData) => {
     localStorage.setItem("userPreferences", JSON.stringify(data));
@@ -183,7 +194,7 @@ export function PreferencesSetup() {
     processFinancialEvent('budgetSaved');
   };
 
-  if (!isMounted) {
+  if (!isMounted || authLoading || !firestoreUser) {
     return (
       <div className="max-w-xl mx-auto p-4 md:p-6 space-y-6 animate-pulse">
         <div className="h-10 bg-muted rounded w-1/3"></div>
@@ -209,7 +220,7 @@ export function PreferencesSetup() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="displayName">Display Name</Label>
-              <Input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required disabled={!user} />
+              <Input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required disabled={isSavingProfile} />
             </div>
             <div className="space-y-2">
               <Label>Profile Picture</Label>
@@ -221,7 +232,7 @@ export function PreferencesSetup() {
                     <ImageIcon className="h-8 w-8 text-muted-foreground" />
                   </div>
                 )}
-                <Input id="profileImage" type="file" accept="image/png, image/jpeg" onChange={onImageFileChange} className="max-w-xs" disabled={!user} />
+                <Input id="profileImage" type="file" accept="image/png, image/jpeg" onChange={onImageFileChange} className="max-w-xs" disabled={isSavingProfile} />
               </div>
             </div>
              {uploadProgress !== null && (
@@ -232,7 +243,7 @@ export function PreferencesSetup() {
             )}
           </CardContent>
           <CardFooter>
-            <Button type="submit" disabled={!user || isSavingProfile}>
+            <Button type="submit" disabled={isSavingProfile || (!profileImageFile && displayName === firestoreUser?.displayName)}>
               {isSavingProfile ? <Loader2 className="animate-spin" /> : "Save Profile"}
             </Button>
           </CardFooter>

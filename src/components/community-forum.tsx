@@ -133,7 +133,7 @@ function CommentsSheet({ post }: { post: Post }) {
             {user && (
                  <div className="mt-auto p-4 border-t bg-background">
                     <div className="flex gap-2">
-                        <Textarea value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Add a comment..." rows={2} />
+                        <Textarea value={newComment} onChange={e => setNewComment(e.target.value)} placeholder="Add a comment..." rows={2} disabled={!user || isSubmitting}/>
                         <Button onClick={handleAddComment} disabled={!user || isSubmitting || !newComment.trim()}>
                             {isSubmitting ? <Loader2 className="animate-spin" /> : <Send />}
                         </Button>
@@ -147,7 +147,7 @@ function CommentsSheet({ post }: { post: Post }) {
 
 // --- Main Forum Component ---
 export function CommunityForum() {
-  const { user } = useAuth();
+  const { user, firestoreUser, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPostContent, setNewPostContent] = useState('');
@@ -227,12 +227,12 @@ export function CommunityForum() {
     setIsSubmitting(true);
     setUploadProgress(null);
 
-    const postDocRef = doc(collection(db, "posts"));
-
     try {
       let downloadURL: string | null = null;
       let imagePathValue: string | null = null;
       
+      const postDocRef = doc(collection(db, "posts"));
+
       if (postImageFile) {
         imagePathValue = `posts/${postDocRef.id}/${uuidv4()}`;
         const storageRef = ref(storage, imagePathValue);
@@ -280,9 +280,9 @@ export function CommunityForum() {
       console.error("Error creating post:", error);
       let errorMessage = "Could not create your post. Please try again.";
       if (error.code === 'storage/unauthorized') {
-        errorMessage = "Image upload failed. Please check your Firebase Storage security rules in the Firebase Console.";
+        errorMessage = "Image upload failed due to a permissions error. Please go to your Firebase Console, navigate to Storage > Rules, and ensure your rules allow writes to the 'posts' path for authenticated users.";
       }
-      toast({ title: "Error Creating Post", description: errorMessage, variant: "destructive" });
+      toast({ title: "Error Creating Post", description: errorMessage, variant: "destructive", duration: 9000 });
     } finally {
       setIsSubmitting(false);
       setUploadProgress(null);
@@ -318,7 +318,7 @@ export function CommunityForum() {
     }
   }
   
-  if (!isMounted) {
+  if (!isMounted || authLoading) {
     return (
       <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6 animate-pulse">
         <div className="h-48 bg-muted rounded-lg"></div>
@@ -342,7 +342,7 @@ export function CommunityForum() {
             placeholder="Share your thoughts, ask questions, or offer advice..."
             rows={4}
             className="resize-none"
-            disabled={!user}
+            disabled={!firestoreUser || isSubmitting}
           />
           <div className="flex items-center gap-2">
             <ImageIcon className="h-5 w-5 text-muted-foreground" />
@@ -352,7 +352,7 @@ export function CommunityForum() {
                 accept="image/png, image/jpeg"
                 onChange={handleImageFileChange}
                 className="text-sm"
-                disabled={!user}
+                disabled={!firestoreUser || isSubmitting}
               />
           </div>
           {uploadProgress !== null && (
@@ -360,7 +360,7 @@ export function CommunityForum() {
           )}
         </CardContent>
         <CardFooter className="flex justify-end">
-          <Button onClick={handleCreatePost} disabled={!user || !newPostContent.trim() || isSubmitting}>
+          <Button onClick={handleCreatePost} disabled={!firestoreUser || !newPostContent.trim() || isSubmitting}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
             {isSubmitting ? (uploadProgress !== null ? `Uploading... ${Math.round(uploadProgress)}%` : 'Posting...') : 'Post'}
           </Button>

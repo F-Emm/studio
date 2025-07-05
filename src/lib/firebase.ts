@@ -21,6 +21,8 @@ let db: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
 
 if (isFirebaseConfigured) {
+  console.log('✅ [Firebase] All environment variables found. Initializing Firebase...');
+  
   const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -35,6 +37,8 @@ if (isFirebaseConfigured) {
   auth = getAuth(app);
   db = getFirestore(app);
   storage = getStorage(app);
+} else {
+    console.error('❌ [Firebase] Missing environment variables. Firebase will not be initialized. Please check your .env.local file and RESTART the server.');
 }
 
 export { app, auth, db, storage };

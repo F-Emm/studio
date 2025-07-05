@@ -29,11 +29,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [configError, setConfigError] = useState(false);
 
   useEffect(() => {
-    // This check is more reliable as it runs on the client-side.
+    // This check is now much simpler. It relies on the initialization
+    // result from firebase.ts, which runs on the server.
+    // If `auth` or `db` are null, it means the environment variables
+    // were not available at build time.
     if (!auth || !db) {
-        setConfigError(true);
-        setLoading(false);
-        return;
+      setConfigError(true);
+      setLoading(false);
+      return;
     }
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {

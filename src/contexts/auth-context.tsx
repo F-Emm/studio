@@ -29,10 +29,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [configError, setConfigError] = useState(false);
 
   useEffect(() => {
-    // This check is now much simpler. It relies on the initialization
-    // result from firebase.ts, which runs on the server.
-    // If `auth` or `db` are null, it means the environment variables
-    // were not available at build time.
+    // This is the crucial check. If firebase.ts failed to initialize, auth and db will be null.
     if (!auth || !db) {
       setConfigError(true);
       setLoading(false);

@@ -117,7 +117,9 @@ function CommentsSheet({ post, userProfiles }: { post: Post, userProfiles: Recor
                      <div key={comment.id} className="flex items-start space-x-3">
                          <Avatar className="h-8 w-8">
                              <AvatarImage src={commentAuthor?.photoURL || undefined} alt={commentAuthor?.displayName} />
-                             <AvatarFallback>{commentAuthor?.displayName?.charAt(0) || 'U'}</AvatarFallback>
+                             <AvatarFallback>
+                                {commentAuthor?.displayName?.split(' ').map(n => n[0]).join('').slice(0, 2) || <UserCircle className="h-4 w-4" />}
+                             </AvatarFallback>
                          </Avatar>
                          <div className="bg-muted p-3 rounded-lg flex-1">
                              <div className="flex justify-between items-baseline">

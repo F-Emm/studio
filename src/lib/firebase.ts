@@ -12,26 +12,8 @@ const requiredEnvVars = [
   'NEXT_PUBLIC_FIREBASE_APP_ID',
 ];
 
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
-export const isFirebaseConfigured = missingEnvVars.length === 0;
-
-// --- Start of Debugging Code ---
-if (typeof window !== 'undefined') { // Run only on the client-side
-  console.log("--- Firebase Environment Variable Check ---");
-  requiredEnvVars.forEach(envVar => {
-    // We check if the value is truthy. An empty string is not a valid key.
-    console.log(`[Firebase Check] ${envVar}: ${process.env[envVar] ? '✅ Loaded' : '❌ MISSING'}`);
-  });
-  if (!isFirebaseConfigured) {
-    console.log(`[Firebase Check] Configuration is incomplete. Missing: ${missingEnvVars.join(', ')}`);
-    console.log("[Firebase Check] Please ensure your .env.local file is correct and RESTART the development server.");
-  } else {
-    console.log("[Firebase Check] All Firebase variables are loaded successfully!");
-  }
-  console.log("-----------------------------------------");
-}
-// --- End of Debugging Code ---
-
+// Check if all required environment variables are present and not empty.
+export const isFirebaseConfigured = requiredEnvVars.every(envVar => process.env[envVar]);
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;

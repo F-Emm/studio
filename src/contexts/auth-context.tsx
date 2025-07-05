@@ -5,10 +5,9 @@ import type { User } from 'firebase/auth';
 import { createContext, useState, useEffect, useContext, type ReactNode } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db, isFirebaseConfigured } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { SplashScreen } from '@/components/splash-screen';
 import type { FirestoreUser } from '@/types/firestore';
-import { FirebaseConfigErrorScreen } from '@/components/firebase-config-error';
 
 interface AuthContextType {
   user: User | null;
@@ -26,32 +25,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [firestoreUser, setFirestoreUser] = useState<FirestoreUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showConfigError, setShowConfigError] = useState(false);
-  const [configChecked, setConfigChecked] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setConfigChecked(true);
-      if (!isFirebaseConfigured) {
-        setShowConfigError(true);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!configChecked || showConfigError) {
-      if (configChecked) setLoading(false);
-      return;
-    }
-
-    if (!isFirebaseConfigured || !auth) {
+    // If auth is null (due to missing config), this will cause an error in the console,
+    // but it will no longer show the config error screen.
+    if (!auth || !db) {
+        console.error("Firebase is not configured. The application will not function correctly.");
         setLoading(false);
+        // We render children anyway to allow page to load, but auth features will fail.
         return;
     }
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
-      if (user && db) {
+      if (user) {
         const userDocRef = doc(db, 'users', user.uid);
         const unsubFirestore = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
@@ -75,15 +62,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe();
-  }, [configChecked, showConfigError]);
-
-  if (!configChecked) {
-    return <SplashScreen />;
-  }
-
-  if (showConfigError) {
-    return <FirebaseConfigErrorScreen />;
-  }
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, firestoreUser, loading }}>

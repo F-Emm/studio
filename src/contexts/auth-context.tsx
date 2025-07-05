@@ -8,6 +8,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { SplashScreen } from '@/components/splash-screen';
 import type { FirestoreUser } from '@/types/firestore';
+import { FirebaseConfigErrorScreen } from '@/components/firebase-config-error';
 
 interface AuthContextType {
   user: User | null;
@@ -25,14 +26,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [firestoreUser, setFirestoreUser] = useState<FirestoreUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [configError, setConfigError] = useState(false);
 
   useEffect(() => {
-    // If auth is null (due to missing config), this will cause an error in the console,
-    // but it will no longer show the config error screen.
+    // This check is more reliable as it runs on the client-side.
     if (!auth || !db) {
-        console.error("Firebase is not configured. The application will not function correctly.");
+        setConfigError(true);
         setLoading(false);
-        // We render children anyway to allow page to load, but auth features will fail.
         return;
     }
 
@@ -63,6 +63,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return () => unsubscribe();
   }, []);
+
+  if (configError) {
+    return <FirebaseConfigErrorScreen />;
+  }
 
   return (
     <AuthContext.Provider value={{ user, firestoreUser, loading }}>

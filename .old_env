@@ -1,0 +1,5 @@
+# DEPRECATED: Please copy your GOOGLE_API_KEY from this file into the .env.local file.
+# After you have copied the key, you can safely delete this file.
+# This file is no longer used by the application.
+
+GOOGLE_API_KEY=AIzaSyCBOauXUd7RbGXwOBxK2_LklAPyicsir3Y

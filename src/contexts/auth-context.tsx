@@ -26,9 +26,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [firestoreUser, setFirestoreUser] = useState<FirestoreUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [configChecked, setConfigChecked] = useState(false);
+  const [showConfigError, setShowConfigError] = useState(false);
 
   useEffect(() => {
-    // If firebase is not configured, don't attempt to connect.
+    // Defer the configuration check to the client to prevent hydration mismatch.
+    if (!isFirebaseConfigured) {
+      setShowConfigError(true);
+    }
+    setConfigChecked(true);
+
+    // If config is bad, don't proceed with auth listeners.
     if (!isFirebaseConfigured || !auth) {
       setLoading(false);
       return;
@@ -64,9 +72,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  // Render an actionable error screen if Firebase is not configured.
-  // This prevents the rest of the app from rendering and crashing.
-  if (!isFirebaseConfigured) {
+  // While checking config on the client, show a splash screen to match the server render.
+  if (!configChecked) {
+    return <SplashScreen />;
+  }
+  
+  // If config check on client reveals an error, show the error screen.
+  if (showConfigError) {
     return <FirebaseConfigErrorScreen />;
   }
 

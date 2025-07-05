@@ -19,13 +19,12 @@ import { useToast } from '@/hooks/use-toast';
 import { Progress } from './ui/progress';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
+import type { FirestoreUser } from '@/types/firestore';
 
 // --- Interfaces ---
 interface Post {
   id: string;
   authorId: string;
-  authorName: string;
-  authorAvatarUrl?: string | null;
   content: string;
   timestamp: Timestamp;
   imageUrl?: string | null;
@@ -36,8 +35,6 @@ interface Post {
 interface Comment {
     id: string;
     authorId: string;
-    authorName: string;
-    authorAvatarUrl?: string | null;
     content: string;
     timestamp: Timestamp;
 }
@@ -62,7 +59,7 @@ const formatTimeAgo = (timestamp: Timestamp | null): string => {
 
 
 // --- Comments Component ---
-function CommentsSheet({ post }: { post: Post }) {
+function CommentsSheet({ post, userProfiles }: { post: Post, userProfiles: Record<string, FirestoreUser> }) {
     const { user } = useAuth();
     const { toast } = useToast();
     const [comments, setComments] = useState<Comment[]>([]);
@@ -95,8 +92,6 @@ function CommentsSheet({ post }: { post: Post }) {
         try {
             await addDoc(collection(db, "posts", post.id, "comments"), {
                 authorId: user.uid,
-                authorName: user.displayName || "Anonymous",
-                authorAvatarUrl: user.photoURL || null,
                 content: newComment,
                 timestamp: serverTimestamp(),
             });
@@ -108,27 +103,31 @@ function CommentsSheet({ post }: { post: Post }) {
         }
     };
     
+    const authorName = userProfiles[post.authorId]?.displayName || "a user";
+
     return (
         <SheetContent className="flex flex-col">
             <SheetHeader>
-                <SheetTitle>Comments on {post.authorName}'s post</SheetTitle>
+                <SheetTitle>Comments on {authorName}'s post</SheetTitle>
             </SheetHeader>
             <div className="flex-1 overflow-y-auto pr-6 space-y-4">
-                 {comments.length > 0 ? comments.map(comment => (
+                 {comments.length > 0 ? comments.map(comment => {
+                     const commentAuthor = userProfiles[comment.authorId];
+                     return (
                      <div key={comment.id} className="flex items-start space-x-3">
                          <Avatar className="h-8 w-8">
-                             <AvatarImage src={comment.authorAvatarUrl || undefined} alt={comment.authorName} />
-                             <AvatarFallback>{comment.authorName.charAt(0)}</AvatarFallback>
+                             <AvatarImage src={commentAuthor?.photoURL || undefined} alt={commentAuthor?.displayName} />
+                             <AvatarFallback>{commentAuthor?.displayName?.charAt(0) || 'U'}</AvatarFallback>
                          </Avatar>
                          <div className="bg-muted p-3 rounded-lg flex-1">
                              <div className="flex justify-between items-baseline">
-                                 <p className="font-semibold text-sm">{comment.authorName}</p>
+                                 <p className="font-semibold text-sm">{commentAuthor?.displayName || 'User'}</p>
                                  <p className="text-xs text-muted-foreground">{formatTimeAgo(comment.timestamp)}</p>
                              </div>
                              <p className="text-sm">{comment.content}</p>
                          </div>
                      </div>
-                 )) : <p className="text-muted-foreground text-center py-8">No comments yet.</p>}
+                 )}) : <p className="text-muted-foreground text-center py-8">No comments yet.</p>}
             </div>
             {user && (
                  <div className="mt-auto p-4 border-t bg-background">
@@ -157,20 +156,34 @@ export function CommunityForum() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const [userProfiles, setUserProfiles] = useState<Record<string, FirestoreUser>>({});
 
   useEffect(() => {
     setIsMounted(true);
+    
+    // Fetch all user profiles and listen for changes
+    const usersRef = collection(db, "users");
+    const unsubProfiles = onSnapshot(usersRef, (snapshot) => {
+        const profiles: Record<string, FirestoreUser> = {};
+        snapshot.forEach(doc => {
+            profiles[doc.id] = doc.data() as FirestoreUser;
+        });
+        setUserProfiles(profiles);
+    }, (error) => {
+        console.error("Error fetching user profiles: ", error);
+        toast({ title: "Error", description: "Could not load user profiles.", variant: "destructive" });
+    });
 
     if (!user) {
         setPosts([]);
         setIsLoadingPosts(false);
-        return;
+        return () => unsubProfiles();
     }
     
     setIsLoadingPosts(true);
     const q = query(collection(db, "posts"), orderBy("timestamp", "desc"));
     
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const unsubPosts = onSnapshot(q, (querySnapshot) => {
       const postsData: Post[] = [];
       const commentCountPromises: Promise<void>[] = [];
 
@@ -215,7 +228,10 @@ export function CommunityForum() {
       setIsLoadingPosts(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+        unsubPosts();
+        unsubProfiles();
+    };
   }, [toast, user]);
 
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -261,8 +277,6 @@ export function CommunityForum() {
       
       await setDoc(postDocRef, {
         authorId: user.uid,
-        authorName: user.displayName || "Anonymous",
-        authorAvatarUrl: user.photoURL || null,
         content: newPostContent,
         timestamp: serverTimestamp(),
         likedBy: [],
@@ -378,19 +392,21 @@ export function CommunityForum() {
             <p>Be the first to share something with the community!</p>
           </div>
         ) : (
-          posts.map((post) => (
+          posts.map((post) => {
+            const author = userProfiles[post.authorId];
+            return (
             <Card key={post.id} className="shadow-md hover:shadow-lg transition-shadow duration-300">
               <CardHeader>
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
                         <Avatar>
-                            <AvatarImage src={post.authorAvatarUrl || undefined} alt={post.authorName} data-ai-hint="profile person" />
+                            <AvatarImage src={author?.photoURL || undefined} alt={author?.displayName} data-ai-hint="profile person" />
                             <AvatarFallback>
-                            {post.authorName.split(' ').map(n => n[0]).join('') || <UserCircle />}
+                            {author?.displayName?.split(' ').map(n => n[0]).join('') || <UserCircle />}
                             </AvatarFallback>
                         </Avatar>
                         <div>
-                            <p className="font-semibold text-sm">{post.authorName}</p>
+                            <p className="font-semibold text-sm">{author?.displayName || 'Loading...'}</p>
                             <p className="text-xs text-muted-foreground">{formatTimeAgo(post.timestamp)}</p>
                         </div>
                     </div>
@@ -435,11 +451,11 @@ export function CommunityForum() {
                             <MessageSquare className="h-4 w-4" /> {commentCounts[post.id] || 0}
                         </Button>
                     </SheetTrigger>
-                    <CommentsSheet post={post} />
+                    <CommentsSheet post={post} userProfiles={userProfiles} />
                 </Sheet>
               </CardFooter>
             </Card>
-          ))
+          )})
         )}
       </div>
     </div>
